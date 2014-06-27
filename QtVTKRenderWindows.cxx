@@ -11,30 +11,21 @@ inline QVector3D Leap2QVector(Leap::Vector v)
 void MyListener::onFrame(const Leap::Controller & ctl)
 {
 
-	if(timer->elapsed() > 20)
+	if(timer->elapsed() > 100)
 	{
 		Leap::Frame f = ctl.frame();
-		// This is a hack so that we avoid having to declare a signal and
-		// use moc generated code.
 		setObjectName(QString::number(f.id()));
 		// emits objectNameChanged(QString)
 		//emit translate2(SimpleTranslate(f));
 
-		/////////////////
-		//Leap::Vector origin, point1, point2;
-		//GetRectangle(f, origin, point1, point2);
-		//GetAbsoluteRectangle(f, origin, point1, point2);
-		//QVector3D origin_q(origin.x, origin.y, origin.z);
-		//QVector3D point1_q(point1.x, point1.y, point1.z);
-		//QVector3D point2_q(point2.x, point2.y, point2.z);
-		//emit UpdateRectangle(origin_q, point1_q, point2_q);
-
-		//camera
 
 		Leap::Vector center, xDir, yDir, zDir;
 		GetSpace(f, center, xDir, yDir, zDir);
-		//zDir = - zDir;
 		emit UpdateCamera(Leap2QVector(center), Leap2QVector(xDir), Leap2QVector(yDir), Leap2QVector(zDir));
+
+		Leap::Vector toolTip, toolDir;
+		GetTool(f, toolTip, toolDir);
+		emit UpdatePlane(Leap2QVector(toolTip), Leap2QVector(toolDir));
 
 		timer->restart();
 	}
@@ -67,7 +58,6 @@ vtkSmartPointer<vtkImageAlgorithm> ReadImageData(int argc, char *argv[])
 	//readerRet = reader;
 	//	reader->GetOutput()->GetDimensions(imageDims);
 }
-
 vtkSmartPointer<vtkVolume> QtVTKRenderWindows::AddVolume(vtkSmartPointer<vtkImageAlgorithm> reader)
 {
 
@@ -135,19 +125,6 @@ vtkSmartPointer<vtkActor> QtVTKRenderWindows::AddOutline(vtkSmartPointer<vtkImag
 
 	return outlineActor;
 }
-//
-//void QtVTKRenderWindows::keyPressEvent(QKeyEvent *event)
-//{
-//	if(event->key() == Qt::Key_Up)
-//    {
-//    //    myLabel->setText("You pressed ESC");
-//		double p[3];
-//		camera->GetPosition(p);
-//		p[2] +=10;
-//		camera->SetPosition(p);
-//    }
-//}
-
 
 QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 {
@@ -164,8 +141,9 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	vtkRenderWindowInteractor *irenVol = this->ui->view1->GetInteractor();
 
 	// Add the volume to the scene
+	vtkSmartPointer<vtkActor> outlineActor = AddOutline(reader);
 	renVol->AddVolume( AddVolume(reader) );
-	renVol->AddActor(AddOutline(reader));
+	renVol->AddActor(outlineActor);
 
 	double dataCenter[3];
 	input->GetCenter(dataCenter);
@@ -178,6 +156,17 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	renVol->SetActiveCamera(camera);
 
 
+	//plane widget
+	//http://www.cnblogs.com/dawnWind/archive/2013/05/04/3D_11.html
+	//http://www.vtk.org/Wiki/VTK/Examples/Cxx/Widgets/ImplicitPlaneWidget2
+	rep = vtkSmartPointer<vtkImplicitPlaneRepresentation>::New();
+	rep->SetPlaceFactor(1.1); // This must be set prior to placing the widget
+	rep->PlaceWidget(outlineActor->GetBounds());
+	implicitPlaneWidget = vtkImplicitPlaneWidget2::New();
+	implicitPlaneWidget->SetInteractor(irenVol);
+	implicitPlaneWidget->SetRepresentation(rep);
+	implicitPlaneWidget->On();
+
 	// Set up action signals and slots
 	connect(this->ui->actionExit, SIGNAL(triggered()), this, SLOT(slotExit()));
 	connect(this->ui->resetButton, SIGNAL(pressed()), this, SLOT(ResetViews()));
@@ -188,6 +177,9 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 		SLOT(setText(QString)));
 	connect(&listener, SIGNAL(UpdateCamera(QVector3D, QVector3D, QVector3D, QVector3D)), 
 		this, SLOT(UpdateCamera(QVector3D, QVector3D, QVector3D, QVector3D)));
+
+	connect(&listener, SIGNAL(UpdatePlane(QVector3D, QVector3D)), 
+		this, SLOT(UpdatePlane(QVector3D, QVector3D)));
 
 	vtkSmartPointer<vtkEventQtSlotConnect> m_connections = vtkEventQtSlotConnect::New();
 	m_connections->Connect(irenVol, vtkCommand::KeyPressEvent, 
@@ -227,75 +219,51 @@ void QtVTKRenderWindows::slotKeyPressed(vtkObject *a, unsigned long b, void *c, 
 	camera->PrintSelf(cout,  aa);
 }
 
-////http://en.wikipedia.org/wiki/Rotation_matrix
-//inline QVector3D rotateX()
-//{
-//	QMatrix4x4 m;
-//}
-
 void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir)
 {
-	
 	QMatrix4x4 m;
+	m.rotate(- 90, 1.0, 0.0, 0.0);
 
-	QVector3D palmDir = xDir;
-	QVector3D thumbDir = yDir;
-	QVector3D fingerDir = -zDir;
+	handTranslation.setToIdentity();
+	handTranslation.setRow(0, QVector4D(xDir));
+	handTranslation.setRow(1, QVector4D(yDir));
+	handTranslation.setRow(2, QVector4D(zDir));
 
 	double dataCenter[3];
 	input->GetCenter(dataCenter);
-
-	//camera = vtkSmartPointer<vtkCamera>::New();
-	////camera->SetPosition(dataCenter[0] , dataCenter[1], dataCenter[2] - 66);
-	//camera->SetPosition(dataCenter[0], dataCenter[1] + 600 , dataCenter[2] + 0.1);
-
-
-	m.rotate(- 90, 1.0, 0.0, 0.0);
-	palmDir = m * palmDir;
-	thumbDir = m * thumbDir;
-	fingerDir = m * fingerDir;
-
-	cout<< "palmDir:\t"<<palmDir.x()<<",\t"<<palmDir.y()<<",\t"<<palmDir.z()<<endl;
-	cout<< "thumbDir:\t"<<thumbDir.x()<<",\t"<<thumbDir.y()<<",\t"<<thumbDir.z()<<endl;
-	cout<< "fingerDir:\t"<<fingerDir.x()<<",\t"<<fingerDir.y()<<",\t"<<fingerDir.z()<<endl;
+	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);
 
 	
-	QVector3D xAxis, yAxis, zAxis;
-	xAxis = palmDir;
-	yAxis =  - fingerDir;
-	zAxis = - thumbDir;
-	cout<< "***"<<endl;
-	cout<< "xAxis:\t"<<xAxis.x()<<",\t"<<xAxis.y()<<",\t"<<xAxis.z()<<endl;
-	cout<< "yAxis:\t"<<yAxis.x()<<",\t"<<yAxis.y()<<",\t"<<yAxis.z()<<endl;
-	cout<< "zAxis:\t"<<zAxis.x()<<",\t"<<zAxis.y()<<",\t"<<zAxis.z()<<endl;
-
-
-	double p[3];
-	QVector3D cameraPos(dataCenter[0], dataCenter[1] + 600 , dataCenter[2] + 0.1);
-	cameraPos[0] = QVector3D::dotProduct(cameraPos, xAxis);
-	cameraPos[1] = QVector3D::dotProduct(cameraPos, yAxis);
-	cameraPos[2] = QVector3D::dotProduct(cameraPos, zAxis);
-	
-	//camera->GetPosition(p);
-	////QVector3D vp(p[0], p[1], p[2]);
-	//camera->GetFocalPoint(p) ;
-	//QVector3D cameraFocalPoint(p[0], p[1], p[2]);
-	////vp[0] = QVector3D::dotProduct(vp, xDir);
-	////vp[1] = QVector3D::dotProduct(vp, xDir);
-	////vp[2] = QVector3D::dotProduct(vp, xDir);
-	//
-	//QVector3D cameraDir = - zDir;
-	//QVector3D cameraPos = cameraFocalPoint - 512 * cameraDir;
-
-
+	QVector3D viewDir = m * handTranslation * ( QVector3D(0,0,-1));
+	QVector3D cameraPos = dataCenterQ - viewDir * 600;
 	camera->SetPosition(cameraPos.x(), cameraPos.y(), cameraPos.z());
-	QVector3D viewUp(0,0,-1);
-	viewUp[0] = QVector3D::dotProduct(viewUp, xAxis);
-	viewUp[1] = QVector3D::dotProduct(viewUp, yAxis);
-	viewUp[2] = QVector3D::dotProduct(viewUp, zAxis);
 	
-
+	QVector3D viewUp = m * handTranslation * yDir;
 	camera->SetViewUp(viewUp.x(), viewUp.y(), viewUp.z());
+	
 	this->ui->view1->repaint();
+}
 
+
+void QtVTKRenderWindows::UpdatePlane(QVector3D origin, QVector3D normal)
+{
+	//cout<< "origin:\t"<<origin.x()<<",\t"<<origin.y()<<",\t"<<origin.z()<<endl;
+	QMatrix4x4 m;
+	m.rotate(- 90, 1.0, 0.0, 0.0);
+	origin = origin - QVector3D(0.5,0.5,0.5);
+	origin = m * origin;
+	origin = origin + QVector3D(0.5,0.5,0.5);
+
+	normal = m * handTranslation * normal;
+
+	//cout<< "origin:\t"<<origin.x()<<",\t"<<origin.y()<<",\t"<<origin.z()<<endl;
+
+	double bbox[6];
+	input->GetBounds(bbox);
+	origin.setX(origin.x() * (bbox[1] - bbox[0]) + bbox[0]);
+	origin.setY(origin.y() * (bbox[3] - bbox[2]) + bbox[2]);
+	origin.setZ(origin.z() * (bbox[5] - bbox[4]) + bbox[4]);
+
+	rep->SetOrigin(origin.x(), origin.y(), origin.z());
+	rep->SetNormal(normal.x(), normal.y(), normal.z());
 }

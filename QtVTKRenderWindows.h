@@ -5,6 +5,7 @@
 #include <QElapsedTimer>
 #include <QVector3D>
 #include <QMatrix4x4>
+#include <QQuaternion>
 
 #include "vtkSmartPointer.h"
 #include <vtkRenderer.h>
@@ -27,6 +28,8 @@
 #include <QKeyEvent>
 //#include "vtkMapper.h"
 #include <vtkEventQtSlotConnect.h>
+#include "vtkImplicitPlaneWidget2.h"
+#include "vtkImplicitPlaneRepresentation.h"
 
 #include "LeapInteraction.h"
 
@@ -36,6 +39,7 @@ class MyListener : public QObject, public Leap::Listener {
 signals:
 	void UpdateRectangle(QVector3D origin, QVector3D point1, QVector3D point2);
 	void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
+	void UpdatePlane(QVector3D origin, QVector3D normal);
 	void translate2(float v);
 
 public:
@@ -77,6 +81,7 @@ public:
 //		void slotKeyPressed(vtkObject *, unsigned long, void *, void *, vtkCommand *command);
 		void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 		void slotKeyPressed(vtkObject *a, unsigned long b, void *c, void *d, vtkCommand *command);
+		void UpdatePlane(QVector3D origin, QVector3D normal);
 protected:
 
 	MyListener listener;
@@ -91,7 +96,9 @@ private:
 	// Designer form
 	Ui_QtVTKRenderWindows *ui;
 	vtkSmartPointer<vtkImageData> input;
-
+	vtkSmartPointer<vtkImplicitPlaneWidget2> implicitPlaneWidget;
+	vtkSmartPointer<vtkImplicitPlaneRepresentation> rep;
+	QMatrix4x4 handTranslation;
 };
 
 #endif // QtVTKRenderWindows_H

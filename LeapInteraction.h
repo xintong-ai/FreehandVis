@@ -45,60 +45,31 @@ inline float SimpleTranslate(Leap::Frame frame)
 }
 
 
-inline Leap::Vector RelativePalm3DLoc(Leap::Frame frame, Leap::Vector p)
-{
-	Leap::Hand leftHand = frame.hands().leftmost();
-	Leap::Hand rightHand = frame.hands().rightmost();
-	Leap::Vector palmCenter = leftHand.stabilizedPalmPosition();
-	float spaceSide = leftHand.palmWidth() * 2;
-	Leap::Vector dir = leftHand.direction().normalized();
-	Leap::Finger middleFinger = leftHand.fingers().fingerType(Leap::Finger::Type::TYPE_MIDDLE).frontmost();
-	Leap::Vector middleFingerTip = middleFinger.stabilizedTipPosition();
-	Leap::Vector palmNormal = leftHand.palmNormal();
-	Leap::Vector yDir = palmNormal.cross(dir).normalized();
-	Leap::Vector origin = palmCenter - dir * spaceSide * 0.3 - yDir * spaceSide * 0.5;
 
-	//	Leap::Vector pointerTip = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
-	Leap::Vector vecPalmCenter2Tip = p - palmCenter;
-	float dist2Palm = vecPalmCenter2Tip.dot(palmNormal.normalized());
-	//http://stackoverflow.com/questions/9605556/how-to-project-a-3d-point-to-a-3d-plane
-	Leap::Vector projTip = vecPalmCenter2Tip - dist2Palm * palmNormal + palmCenter;
-
-	Leap::Vector vecOrigin2ProjTip = projTip - origin;
-	Leap::Vector ret;
-	ret.x = vecOrigin2ProjTip.dot(dir) / spaceSide;
-	ret.y = vecOrigin2ProjTip.dot(yDir) / spaceSide;
-	ret.z = (dist2Palm - 50) / spaceSide;
-
-
-	return ret;
-}
-
-
-inline void GetRectangle(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &point1, Leap::Vector &point2)
-{
-	//Leap::Hand leftHand = frame.hands().leftmost();
-	Leap::Hand rightHand = frame.hands().rightmost();
-	//Leap::Vector dirLeft = leftHand.direction().normalized();
-	//Leap::Vector zDir = leftHand.palmNormal().normalized();
-	//Leap::Vector yDir = zDir.cross(dirLeft).normalized();
-	//Leap::Vector xDir = yDir.cross(zDir);
-	//
-	//Leap::Vector rightNormal = rightHand.palmNormal().normalized();
-	//planeNormal.x = rightNormal.dot(dirLeft);
-	//planeNormal.y = rightNormal.dot(yDir);
-	//planeNormal.z = rightNormal.dot(palmNormalLeft);
-	//planeNormal = planeNormal.normalized();
-
-	origin = Clamp(RelativePalm3DLoc(frame, rightHand.stabilizedPalmPosition()));
-	point1 = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
-	point2 = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_THUMB).frontmost().tipPosition();
-	cout<<"**point1"<<point1.x<<","<<point1.y<<","<<point1.z<<endl;
-	cout<<"**point2"<<point2.x<<","<<point2.y<<","<<point2.z<<endl;
-
-	point1 = Clamp(RelativePalm3DLoc(frame, (point1 - origin).normalized() * 10 + origin));
-	point2 = Clamp(RelativePalm3DLoc(frame, (point2 - origin).normalized() * 10 + origin));
-}
+//inline void GetRectangle(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &point1, Leap::Vector &point2)
+//{
+//	//Leap::Hand leftHand = frame.hands().leftmost();
+//	Leap::Hand rightHand = frame.hands().rightmost();
+//	//Leap::Vector dirLeft = leftHand.direction().normalized();
+//	//Leap::Vector zDir = leftHand.palmNormal().normalized();
+//	//Leap::Vector yDir = zDir.cross(dirLeft).normalized();
+//	//Leap::Vector xDir = yDir.cross(zDir);
+//	//
+//	//Leap::Vector rightNormal = rightHand.palmNormal().normalized();
+//	//planeNormal.x = rightNormal.dot(dirLeft);
+//	//planeNormal.y = rightNormal.dot(yDir);
+//	//planeNormal.z = rightNormal.dot(palmNormalLeft);
+//	//planeNormal = planeNormal.normalized();
+//
+//	origin = Clamp(RelativePalm3DLoc(frame, rightHand.stabilizedPalmPosition()));
+//	point1 = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
+//	point2 = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_THUMB).frontmost().tipPosition();
+//	cout<<"**point1"<<point1.x<<","<<point1.y<<","<<point1.z<<endl;
+//	cout<<"**point2"<<point2.x<<","<<point2.y<<","<<point2.z<<endl;
+//
+//	point1 = Clamp(RelativePalm3DLoc(frame, (point1 - origin).normalized() * 10 + origin));
+//	point2 = Clamp(RelativePalm3DLoc(frame, (point2 - origin).normalized() * 10 + origin));
+//}
 
 inline Leap::Vector NormlizePoint(Leap::Vector p)
 {
@@ -158,12 +129,68 @@ inline void GetSpace(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &xDir
 	xDir = hand.palmNormal().normalized();
 	yDir = xDir.cross(dirLeft).normalized();
 	zDir = xDir.cross(yDir);
-	
+
 	origin = hand.palmPosition();
 
 	//cout<<"**origin:"<<origin.x<<","<<origin.y<<","<<origin.z<<endl;
 	//cout<<"**point1:"<<point1.x<<","<<point1.y<<","<<point1.z<<endl;
 	//cout<<"**point2:"<<point2.x<<","<<point2.y<<","<<point2.z<<endl;
+}
+
+
+inline Leap::Vector RelativePalm3DLoc(Leap::Frame frame, Leap::Vector p)
+{
+	Leap::Vector o, xDir, yDir, zDir;
+	GetSpace(frame, o, xDir, yDir, zDir);
+
+	Leap::Hand leftHand = frame.hands().leftmost();
+	Leap::Vector palmCenter = leftHand.palmPosition();
+	float spaceSide = leftHand.palmWidth() * 2;
+	//Leap::Vector dir = leftHand.direction().normalized();
+	//Leap::Finger middleFinger = leftHand.fingers().fingerType(Leap::Finger::Type::TYPE_MIDDLE).frontmost();
+	//Leap::Vector middleFingerTip = middleFinger.stabilizedTipPosition();
+	//Leap::Vector palmNormal = leftHand.palmNormal();
+	//Leap::Vector yDir = palmNormal.cross(dir).normalized();
+	//cout<<"xDir:"<<xDir.x<<","<<xDir.y<<","<<xDir.z<<endl;
+	//cout<<"yDir:"<<yDir.x<<","<<yDir.y<<","<<yDir.z<<endl;
+	//cout<<"zDir:"<<zDir.x<<","<<zDir.y<<","<<zDir.z<<endl;
+
+	Leap::Vector origin = palmCenter + xDir * spaceSide * 0.5 - zDir * spaceSide * 0.8 - yDir * spaceSide * 0.5;
+
+	//	Leap::Vector pointerTip = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
+	//Leap::Vector vecPalmCenter2Tip = p - palmCenter;
+	//float dist2Palm = vecPalmCenter2Tip.dot(xDir);
+	//http://stackoverflow.com/questions/9605556/how-to-project-a-3d-point-to-a-3d-plane
+	//Leap::Vector projTip = vecPalmCenter2Tip - dist2Palm * xDir + palmCenter;
+
+	//Leap::Vector vecOrigin2ProjTip = projTip - origin;
+	Leap::Vector ret;
+	Leap::Vector vecOrigin2Tip = p - origin;
+	ret.x = vecOrigin2Tip.dot(xDir) / spaceSide;
+	ret.y = vecOrigin2Tip.dot(yDir) / spaceSide;
+	ret.z = vecOrigin2Tip.dot(zDir) / spaceSide;
+
+	//cout<<"ret:"<<ret.x<<","<<ret.y<<","<<ret.z<<endl;
+	return ret;
+}
+
+
+inline void GetTool(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &dir)
+{
+	// Get tools
+	const Leap::ToolList tools = frame.tools();
+	//if(tools.isEmpty())
+	//	return;
+	const Leap::Tool tool = tools.leftmost();
+	//std::cout << std::string(2, ' ') <<  "Tool, id: " << tool.id()
+	//	<< ", position: " << tool.tipPosition()
+	//	<< ", direction: " << tool.direction() << std::endl;
+
+	Leap::Finger pointingFinger = frame.hands().rightmost().fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost();
+	origin = Clamp(RelativePalm3DLoc(frame, pointingFinger.tipPosition()));
+
+
+	dir = pointingFinger.direction().normalized();
 }
 
 #endif
