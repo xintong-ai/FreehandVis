@@ -16,61 +16,6 @@ inline Leap::Vector Clamp(Leap::Vector v)
 	return Leap::Vector(Clamp(v.x), Clamp(v.y), Clamp(v.z));
 }
 
-inline float SimpleTranslate(Leap::Frame frame)
-{
-	const Leap::GestureList gestures = frame.gestures();
-	for (int g = 0; g < gestures.count(); ++g) {
-		Leap::Gesture gesture = gestures[g];
-
-		switch (gesture.type()) {
-		case Leap::Gesture::TYPE_CIRCLE:
-			{
-				Leap::CircleGesture circle = gesture;
-				std::string clockwiseness;
-
-				if (circle.pointable().direction().angleTo(circle.normal()) <= Leap::PI/4) {
-					//clockwiseness = "clockwise";
-					return 1;
-				} else {
-					//clockwiseness = "counterclockwise";
-					return -1;
-				}
-				break;
-			}
-		default:
-			std::cout << std::string(2, ' ')  << "Unknown gesture type." << std::endl;
-			break;
-		}
-	}
-}
-
-
-
-//inline void GetRectangle(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &point1, Leap::Vector &point2)
-//{
-//	//Leap::Hand leftHand = frame.hands().leftmost();
-//	Leap::Hand rightHand = frame.hands().rightmost();
-//	//Leap::Vector dirLeft = leftHand.direction().normalized();
-//	//Leap::Vector zDir = leftHand.palmNormal().normalized();
-//	//Leap::Vector yDir = zDir.cross(dirLeft).normalized();
-//	//Leap::Vector xDir = yDir.cross(zDir);
-//	//
-//	//Leap::Vector rightNormal = rightHand.palmNormal().normalized();
-//	//planeNormal.x = rightNormal.dot(dirLeft);
-//	//planeNormal.y = rightNormal.dot(yDir);
-//	//planeNormal.z = rightNormal.dot(palmNormalLeft);
-//	//planeNormal = planeNormal.normalized();
-//
-//	origin = Clamp(RelativePalm3DLoc(frame, rightHand.stabilizedPalmPosition()));
-//	point1 = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
-//	point2 = rightHand.fingers().fingerType(Leap::Finger::Type::TYPE_THUMB).frontmost().tipPosition();
-//	cout<<"**point1"<<point1.x<<","<<point1.y<<","<<point1.z<<endl;
-//	cout<<"**point2"<<point2.x<<","<<point2.y<<","<<point2.z<<endl;
-//
-//	point1 = Clamp(RelativePalm3DLoc(frame, (point1 - origin).normalized() * 10 + origin));
-//	point2 = Clamp(RelativePalm3DLoc(frame, (point2 - origin).normalized() * 10 + origin));
-//}
-
 inline Leap::Vector NormlizePoint(Leap::Vector p)
 {
 	return Clamp(Leap::Vector((p.x + 50) * 0.01 , (p.y - 150) * 0.01, (p.z + 50) * 0.01));
@@ -165,6 +110,8 @@ inline Leap::Vector RelativePalm3DLoc(Leap::Frame frame, Leap::Vector p)
 
 	//Leap::Vector vecOrigin2ProjTip = projTip - origin;
 	Leap::Vector ret;
+	if(spaceSide < FLT_EPSILON)
+		return Leap::Vector(0.0, 0.0, 0.0);
 	Leap::Vector vecOrigin2Tip = p - origin;
 	ret.x = vecOrigin2Tip.dot(xDir) / spaceSide;
 	ret.y = vecOrigin2Tip.dot(yDir) / spaceSide;
@@ -192,5 +139,14 @@ inline void GetTool(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &dir)
 
 	dir = pointingFinger.direction().normalized();
 }
+
+inline void GetTwoPoints(Leap::Frame frame, Leap::Vector &point1, Leap::Vector &point2)
+{
+	Leap::Vector thumbTip = frame.hands().rightmost().fingers().fingerType(Leap::Finger::Type::TYPE_THUMB).frontmost().tipPosition();
+	Leap::Vector indexTip = frame.hands().rightmost().fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
+	point1 = Clamp(RelativePalm3DLoc(frame, thumbTip));
+	point2 = Clamp(RelativePalm3DLoc(frame, indexTip));
+}
+
 
 #endif

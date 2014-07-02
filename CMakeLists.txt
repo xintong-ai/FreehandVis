@@ -26,9 +26,9 @@ if("${VTK_QT_VERSION}" STREQUAL "")
 endif()
 
 # Set your files and resources here
-set( Srcs QtVTKRenderWindowsApp.cxx QtVTKRenderWindows.cxx)
+set( Srcs QtVTKRenderWindowsApp.cxx QtVTKRenderWindows.cxx LeapListener.cxx)
 
-set( Hdrs QtVTKRenderWindows.h LeapInteraction.h)
+set( Hdrs QtVTKRenderWindows.h LeapInteraction.h LeapListener.h)
 
 set( MOC_Hdrs QtVTKRenderWindows.h LeapInteraction.h)
 

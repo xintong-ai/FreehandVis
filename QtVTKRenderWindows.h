@@ -1,62 +1,54 @@
 #ifndef QtVTKRenderWindows_H
 #define QtVTKRenderWindows_H
 
-#include <QMainWindow>
-#include <QElapsedTimer>
-#include <QVector3D>
 #include <QMatrix4x4>
-#include <QQuaternion>
 
+//read data
 #include "vtkSmartPointer.h"
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
 #include "vtkDICOMImageReader.h"
-#include <vtkSphereSource.h>
-#include <vtkClipPolyData.h>
 #include <vtkPlane.h>
 
+//volume rendering
 #include "vtkColorTransferFunction.h"
 #include "vtkPiecewiseFunction.h"
 #include "vtkVolumeProperty.h"
 #include "vtkSmartVolumeMapper.h"
 #include "vtkImageResample.h"
+
+//outline
 #include <vtkOutlineFilter.h>
 #include "vtkActor.h"
 #include "vtkPolyDataMapper.h"
 #include "vtkCamera.h"
 #include "vtkImageData.h"
-#include <QKeyEvent>
-//#include "vtkMapper.h"
+
 #include <vtkEventQtSlotConnect.h>
 #include "vtkImplicitPlaneWidget2.h"
 #include "vtkImplicitPlaneRepresentation.h"
 
-#include "LeapInteraction.h"
+//globe
+#include "vtkPlaneSource.h"
+#include "vtkSphericalTransform.h"
+#include "vtkTransformPolyDataFilter.h"
+#include "vtkPNMReader.h"
+#include "vtkTexture.h"
+#include "vtkDataSetMapper.h"
+#include "vtkPolyData.h"
 
-class MyListener : public QObject, public Leap::Listener {
-	Q_OBJECT
+//widgets
+#include "vtkLineWidget.h"
+#include "vtkBoxWidget.h"
+#include "vtkBoxRepresentation.h"
 
-signals:
-	void UpdateRectangle(QVector3D origin, QVector3D point1, QVector3D point2);
-	void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
-	void UpdatePlane(QVector3D origin, QVector3D normal);
-	void translate2(float v);
+//Leap:
+#include "LeapListener.h"
 
-public:
-	MyListener()
-	{
-		//timer = new QTimer(this);
-		timer = new QElapsedTimer();
-		timer->start();
-	}
+//primitives
+#include "vtkLineSource.h"
+#include "vtkTransform.h"
 
-	virtual void onFrame(const Leap::Controller & ctl);
-
-private:
-	QElapsedTimer *timer;
-
-
-};
 
 // Forward Qt class declarations
 class Ui_QtVTKRenderWindows;
@@ -74,31 +66,38 @@ public:
 	private slots:
 
 		virtual void slotExit();
-		virtual void ResetViews();
-		//virtual void Render();
-		//virtual void UpdateSeedPlane(QVector3D origin, QVector3D point1, QVector3D point2);
-		//virtual void UpdateSlicePlane(QVector3D origin, QVector3D point1, QVector3D point2);
-//		void slotKeyPressed(vtkObject *, unsigned long, void *, void *, vtkCommand *command);
-		void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 		void slotKeyPressed(vtkObject *a, unsigned long b, void *c, void *d, vtkCommand *command);
+		void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
+		void UpdateCameraGlobe(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 		void UpdatePlane(QVector3D origin, QVector3D normal);
+		void UpdateLine(QVector3D point1, QVector3D point2);
 protected:
 
-	MyListener listener;
+	LeapListener listener;
 	Leap::Controller controller;
-
-	//void keyPressEvent(QKeyEvent *);
 
 private:
 	vtkSmartPointer<vtkVolume> AddVolume(vtkSmartPointer<vtkImageAlgorithm> reader);
 	vtkSmartPointer<vtkActor> AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader);
+	vtkSmartPointer<vtkActor> AddEarth();
+	vtkSmartPointer<vtkActor> GetHandsActor();
+
+	void AddBoxWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
+	void AddLineWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
+	void AddPlaneWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
+
+	QVector3D NormlizedLeapCoords2DataCoords(QVector3D p);
 	vtkSmartPointer<vtkCamera> camera;
+	vtkSmartPointer<vtkCamera> cameraGlobe;
 	// Designer form
 	Ui_QtVTKRenderWindows *ui;
-	vtkSmartPointer<vtkImageData> input;
+	vtkSmartPointer<vtkImageData> inputVolume;
 	vtkSmartPointer<vtkImplicitPlaneWidget2> implicitPlaneWidget;
-	vtkSmartPointer<vtkImplicitPlaneRepresentation> rep;
+	vtkSmartPointer<vtkImplicitPlaneRepresentation> repPlane;
 	QMatrix4x4 handTranslation;
+	vtkSmartPointer<vtkLineWidget> lineWidget;
+	QMatrix4x4 m;				//rotation from Leap coordinate system to VTK coordinate system
+	vtkSmartPointer<vtkPolyData> inputGlobe;
 };
 
 #endif // QtVTKRenderWindows_H
