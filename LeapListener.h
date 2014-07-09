@@ -6,6 +6,9 @@
 #include <QVector3D>
 #include <Leap.h>
 
+typedef QVector<QVector<QVector3D>> TypeArray2;
+typedef QVector<QVector3D> TypeArray;
+
 class LeapListener : public QObject, public Leap::Listener {
 	Q_OBJECT
 
@@ -13,6 +16,7 @@ signals:
 	//void UpdateRectangle(QVector3D origin, QVector3D point1, QVector3D point2);
 	void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 	void UpdatePlane(QVector3D origin, QVector3D normal);
+	void UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm );
 	void UpdateLine(QVector3D point1, QVector3D point2);
 	void translate2(float v);
 

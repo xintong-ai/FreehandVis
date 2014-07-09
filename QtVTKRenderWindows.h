@@ -46,8 +46,17 @@
 #include "LeapListener.h"
 
 //primitives
-#include "vtkLineSource.h"
+//#include "vtkLineSource.h"
 #include "vtkTransform.h"
+//#include "vtkPointSource.h"
+#include "vtkSphereSource.h"
+#include "vtkGlyph3D.h"
+#include "vtkPoints.h"
+#include "vtkTubeFilter.h"
+#include "vtkCellArray.h"
+#include "vtkLine.h"
+#include "vtkProperty.h"
+#include "vtkStripper.h"
 
 
 // Forward Qt class declarations
@@ -68,6 +77,7 @@ public:
 		virtual void slotExit();
 		void slotKeyPressed(vtkObject *a, unsigned long b, void *c, void *d, vtkCommand *command);
 		void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
+		void UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm );
 		void UpdateCameraGlobe(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 		void UpdatePlane(QVector3D origin, QVector3D normal);
 		void UpdateLine(QVector3D point1, QVector3D point2);
@@ -78,7 +88,7 @@ protected:
 
 private:
 	vtkSmartPointer<vtkVolume> AddVolume(vtkSmartPointer<vtkImageAlgorithm> reader);
-	vtkSmartPointer<vtkActor> AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader);
+	//vtkSmartPointer<vtkActor> AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader);
 	vtkSmartPointer<vtkActor> AddEarth();
 	vtkSmartPointer<vtkActor> GetHandsActor();
 
@@ -89,6 +99,7 @@ private:
 	QVector3D NormlizedLeapCoords2DataCoords(QVector3D p);
 	vtkSmartPointer<vtkCamera> camera;
 	vtkSmartPointer<vtkCamera> cameraGlobe;
+	vtkSmartPointer<vtkVolume> _volume;
 	// Designer form
 	Ui_QtVTKRenderWindows *ui;
 	vtkSmartPointer<vtkImageData> inputVolume;
@@ -98,6 +109,23 @@ private:
 	vtkSmartPointer<vtkLineWidget> lineWidget;
 	QMatrix4x4 m;				//rotation from Leap coordinate system to VTK coordinate system
 	vtkSmartPointer<vtkPolyData> inputGlobe;
+
+	vtkSmartPointer<vtkTransform> _leapTransform;
+	vtkSmartPointer<vtkGlyph3D> m_vtkGlyph3D ;
+
+	//std::vector<vtkSphereSource*> _fingerSpheres;
+	//vtkSphereSource* oneSphere;
+	//vtkSmartPointer<vtkPointSource> _fingerPoints;
+	vtkSmartPointer<vtkPoints> m_vtkCenterPoints;
+	vtkSmartPointer<vtkPolyData> m_vtkCenterPolyData;
+	vtkSmartPointer<vtkSphereSource> m_vtkSphereSource;
+
+	vtkSmartPointer<vtkPolyData> _lines;
+	vtkSmartPointer<vtkPolyDataMapper> _lineMapper;
+	vtkSmartPointer<vtkActor> lineActor;
+
+	//rotate
+	vtkSmartPointer<vtkActor> _outlineActor;
 };
 
 #endif // QtVTKRenderWindows_H

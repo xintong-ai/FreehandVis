@@ -75,7 +75,7 @@ inline void GetSpace(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &xDir
 	yDir = xDir.cross(dirLeft).normalized();
 	zDir = xDir.cross(yDir);
 
-	origin = hand.palmPosition();
+	origin = frame.hands().rightmost().fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();//hand.palmPosition();
 
 	//cout<<"**origin:"<<origin.x<<","<<origin.y<<","<<origin.z<<endl;
 	//cout<<"**point1:"<<point1.x<<","<<point1.y<<","<<point1.z<<endl;
@@ -146,6 +146,76 @@ inline void GetTwoPoints(Leap::Frame frame, Leap::Vector &point1, Leap::Vector &
 	Leap::Vector indexTip = frame.hands().rightmost().fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
 	point1 = Clamp(RelativePalm3DLoc(frame, thumbTip));
 	point2 = Clamp(RelativePalm3DLoc(frame, indexTip));
+}
+
+inline void GetSkeletonHand(Leap::Hand hand, std::vector<std::vector<Leap::Vector>> &fingerJoints, 
+	std::vector<Leap::Vector> &palm)
+{
+	//static const float kfJointRadiusScale = 0.75f;
+	//static const float kfBoneRadiusScale = 0.5f;
+	//static const float kfPalmRadiusScale = 1.15f;
+
+	//LeapUtilGL::GLAttribScope colorScope( GL_CURRENT_BIT );
+
+	const Leap::Vector vPalm = hand.palmPosition();
+	const Leap::Vector vPalmDir = hand.direction();
+	const Leap::Vector vPalmNormal = hand.palmNormal();
+	const Leap::Vector vPalmSide = vPalmDir.cross(vPalmNormal).normalized();
+
+	const float fThumbDist = hand.fingers()[Leap::Finger::TYPE_THUMB].bone(Leap::Bone::TYPE_METACARPAL).prevJoint().distanceTo(hand.palmPosition());
+	const Leap::Vector vWrist = vPalm - fThumbDist*(vPalmDir*0.90f + (hand.isLeft() ? -1.0f : 1.0f)*vPalmSide*0.38f);
+
+	Leap::FingerList fingers = hand.fingers();
+
+	float fRadius = 0.0f;
+	Leap::Vector vCurBoxBase;
+	Leap::Vector vLastBoxBase = vWrist;
+
+	for (int i = 0, ei = fingers.count(); i < ei; i++) {
+		const Leap::Finger& finger = fingers[i];
+		fRadius = finger.width() * 0.5f;
+
+		std::vector<Leap::Vector> oneFinger;
+		// draw individual fingers
+		for (int j = Leap::Bone::TYPE_METACARPAL; j <= Leap::Bone::TYPE_DISTAL; j++) {
+			const Leap::Bone& bone = finger.bone(static_cast<Leap::Bone::Type>(j));
+
+			// don't draw metacarpal, a box around the metacarpals is draw instead.
+			if (j == Leap::Bone::TYPE_METACARPAL) {
+				// cache the top of the metacarpal for the next step in metacarpal box
+				vCurBoxBase = bone.nextJoint();
+			} else {
+				//glColor4fv(vBoneColor);
+				//drawCylinder(kStyle_Solid, bone.prevJoint(), bone.nextJoint(), kfBoneRadiusScale*fRadius);
+				//glColor4fv(vJointColor);
+				//drawSphere(kStyle_Solid, bone.nextJoint(), kfJointRadiusScale*fRadius);
+			}
+			oneFinger.push_back(bone.nextJoint());
+		}
+		fingerJoints.push_back(oneFinger);
+
+		// draw segment of metacarpal box
+		//glColor4fv(vBoneColor);
+		//drawCylinder(kStyle_Solid, vCurBoxBase, vLastBoxBase, kfBoneRadiusScale*fRadius);
+		//glColor4fv(vJointColor);
+		//drawSphere(kStyle_Solid, vCurBoxBase, kfJointRadiusScale*fRadius);
+		vLastBoxBase = vCurBoxBase;
+
+		palm.push_back(vCurBoxBase);
+	}
+
+	// close the metacarpal box
+    fRadius = fingers[Leap::Finger::TYPE_THUMB].width() * 0.5f;
+    vCurBoxBase = vWrist;
+    //glColor4fv(vBoneColor);
+    //drawCylinder(kStyle_Solid, vCurBoxBase, vLastBoxBase, kfBoneRadiusScale*fRadius);
+    //glColor4fv(vJointColor);
+    //drawSphere(kStyle_Solid, vCurBoxBase, kfJointRadiusScale*fRadius);
+	palm.push_back(vCurBoxBase);
+    // draw palm position
+    //glColor4fv(vJointColor);
+    //drawSphere(kStyle_Solid, vPalm, kfPalmRadiusScale*fRadius);
+
 }
 
 

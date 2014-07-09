@@ -2,6 +2,24 @@
 #include "QtVTKRenderWindows.h"
 #include "qlabel.h"
 
+class vtkIPWCallback : public vtkCommand
+{
+public:
+	static vtkIPWCallback *New() 
+	{ return new vtkIPWCallback; }
+	virtual void Execute(vtkObject *caller, unsigned long, void*)
+	{
+		vtkImplicitPlaneWidget2 *planeWidget = 
+			reinterpret_cast<vtkImplicitPlaneWidget2*>(caller);
+		vtkImplicitPlaneRepresentation *rep = 
+			reinterpret_cast<vtkImplicitPlaneRepresentation*>(planeWidget->GetRepresentation());
+		rep->GetPlane(this->Plane);
+	}
+	vtkIPWCallback():Plane(0),Actor(0) {}
+	vtkPlane *Plane;
+	vtkActor *Actor;
+
+};
 
 vtkSmartPointer<vtkImageAlgorithm> ReadImageData(int argc, char *argv[])
 {
@@ -30,6 +48,7 @@ vtkSmartPointer<vtkImageAlgorithm> ReadImageData(int argc, char *argv[])
 	//readerRet = reader;
 	//	reader->GetOutput()->GetDimensions(imageDims);
 }
+
 vtkSmartPointer<vtkVolume> QtVTKRenderWindows::AddVolume(vtkSmartPointer<vtkImageAlgorithm> reader)
 {
 
@@ -80,7 +99,7 @@ vtkSmartPointer<vtkVolume> QtVTKRenderWindows::AddVolume(vtkSmartPointer<vtkImag
 	return volume;
 }
 
-vtkSmartPointer<vtkActor> QtVTKRenderWindows::AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader)
+vtkSmartPointer<vtkActor> AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader)
 {
 	vtkSmartPointer<vtkOutlineFilter> outline = vtkOutlineFilter::New();
 	outline->SetInputConnection(reader->GetOutputPort());
@@ -168,7 +187,9 @@ void QtVTKRenderWindows::AddPlaneWidget(vtkSmartPointer<vtkImageAlgorithm> reade
 	//http://www.vtk.org/Wiki/VTK/Examples/Cxx/Widgets/ImplicitPlaneWidget2
 	repPlane = vtkSmartPointer<vtkImplicitPlaneRepresentation>::New();
 	repPlane->SetPlaceFactor(1.1); // This must be set prior to placing the widget
-	repPlane->PlaceWidget(reader->GetOutput()->GetBounds());
+	repPlane->PlaceWidget(_outlineActor->GetBounds());
+	/*repPlane->OutsideBoundsOff();
+	repPlane->UseBoundsOff();*/
 	implicitPlaneWidget = vtkImplicitPlaneWidget2::New();
 	implicitPlaneWidget->SetInteractor(interactor);
 	implicitPlaneWidget->SetRepresentation(repPlane);
@@ -191,28 +212,181 @@ vtkSmartPointer<vtkMatrix4x4> QMatrix2vtkMatrix(QMatrix4x4 v)
 
 vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 {
-	vtkSmartPointer<vtkLineSource> line = vtkLineSource::New();
-	line->SetPoint1(0, 0, 0);
-	line->SetPoint2(50, 50,50);
 
-	vtkSmartPointer<vtkTransform> transform = vtkSmartPointer<vtkTransform>::New();
-	//transform->RotateWXYZ(double angle, double x, double y, double z);
-	//transform->RotateWXYZ(10, 0, 1, 0);
-	QMatrix4x4 handrotateMatrix = handTranslation.inverted();
-	transform->SetMatrix(QMatrix2vtkMatrix(handrotateMatrix));
+	////////transform
+	_leapTransform = vtkSmartPointer<vtkTransform>::New();
 
-	vtkSmartPointer<vtkTransformPolyDataFilter> transformFilter = 
+	double dataCenter[3];
+	inputVolume->GetCenter(dataCenter);
+	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);
+
+	_leapTransform->PostMultiply();
+	_leapTransform->SetMatrix(QMatrix2vtkMatrix(m));
+	_leapTransform->Translate(100, 100, 300);
+	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100;
+	_leapTransform->Scale(scaleFactor, scaleFactor, scaleFactor);
+
+	vtkSmartPointer<vtkTransformPolyDataFilter> leapTransformFilter = 
 		vtkSmartPointer<vtkTransformPolyDataFilter>::New();
+	leapTransformFilter->SetTransform(_leapTransform);
 
-	transformFilter->SetTransform(transform);
-	transformFilter->SetInputConnection(line->GetOutputPort());
-	transformFilter->Update();
+	////////////spheres
+	m_vtkCenterPoints = vtkPoints::New();
+	m_vtkCenterPolyData = vtkPolyData::New();
+	m_vtkSphereSource = vtkSphereSource::New();
+	m_vtkSphereSource->SetRadius(4);
+	m_vtkGlyph3D = vtkGlyph3D::New();
+	for(int i = 0; i < 26; i++)
+		m_vtkCenterPoints->InsertNextPoint(10,10,10);
+	
+	m_vtkCenterPolyData->SetPoints(m_vtkCenterPoints);
+	m_vtkGlyph3D->SetSourceConnection(m_vtkSphereSource->GetOutputPort());
+	m_vtkGlyph3D->SetInputData(m_vtkCenterPolyData);
+	m_vtkGlyph3D->GeneratePointIdsOn();
+
+	/////////lines
+	//https://gitorious.org/vtkwikiexamples/wikiexamples/source/f1789a4a8887aba4f72f3159e19da2b6c56405e0:PolyData/Tube.cxx#L41
+	_lines = vtkPolyData::New();
+
+	vtkSmartPointer<vtkCellArray> lineCell = 
+		vtkSmartPointer<vtkCellArray>::New();
+
+	vtkSmartPointer<vtkLine> line = 
+		vtkSmartPointer<vtkLine>::New();
+	line->GetPointIds()->SetId(0,0);
+	line->GetPointIds()->SetId(1,1);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,1);
+	line->GetPointIds()->SetId(1,2);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,2);
+	line->GetPointIds()->SetId(1,3);
+	lineCell->InsertNextCell(line);
+
+
+	///////////
+	line->GetPointIds()->SetId(0,4);
+	line->GetPointIds()->SetId(1,5);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,5);
+	line->GetPointIds()->SetId(1,6);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,6);
+	line->GetPointIds()->SetId(1,7);
+	lineCell->InsertNextCell(line);
+
+	/////////////
+
+	line->GetPointIds()->SetId(0,8);
+	line->GetPointIds()->SetId(1,9);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,9);
+	line->GetPointIds()->SetId(1,10);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,10);
+	line->GetPointIds()->SetId(1,11);
+	lineCell->InsertNextCell(line);
+
+
+	/////////////////////
+
+	line->GetPointIds()->SetId(0,12);
+	line->GetPointIds()->SetId(1,13);
+	lineCell->InsertNextCell(line);
+
+
+	line->GetPointIds()->SetId(0,13);
+	line->GetPointIds()->SetId(1,14);
+	lineCell->InsertNextCell(line);
+
+
+	line->GetPointIds()->SetId(0,14);
+	line->GetPointIds()->SetId(1,15);
+	lineCell->InsertNextCell(line);
+
+	//////////////////////
+	line->GetPointIds()->SetId(0,16);
+	line->GetPointIds()->SetId(1,17);
+	lineCell->InsertNextCell(line);
+
+
+	line->GetPointIds()->SetId(0,17);
+	line->GetPointIds()->SetId(1,18);
+	lineCell->InsertNextCell(line);
+
+
+	line->GetPointIds()->SetId(0,18);
+	line->GetPointIds()->SetId(1,19);
+	lineCell->InsertNextCell(line);
+
+	////palm
+	line->GetPointIds()->SetId(0,20);
+	line->GetPointIds()->SetId(1,21);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,21);
+	line->GetPointIds()->SetId(1,22);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,22);
+	line->GetPointIds()->SetId(1,23);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,23);
+	line->GetPointIds()->SetId(1,24);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,24);
+	line->GetPointIds()->SetId(1,25);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,25);
+	line->GetPointIds()->SetId(1,20);
+	lineCell->InsertNextCell(line);
+
+	///////////////
+	_lines->SetPoints(m_vtkCenterPoints);
+	_lines->SetLines(lineCell);
+
+	//Create a mapper and actor
+	vtkSmartPointer<vtkPolyDataMapper> lineMapper = 
+		vtkSmartPointer<vtkPolyDataMapper>::New();
+	lineMapper->SetInputData(_lines);
+	lineActor = 
+		vtkSmartPointer<vtkActor>::New();
+	lineActor->SetMapper(lineMapper);
+
+	////if using this one without stripper filter, the tubes are broken at the joint point
+	vtkSmartPointer<vtkStripper> stripperFilter = vtkStripper::New();
+	stripperFilter->SetInputData(_lines);
+	stripperFilter->Update();
+
+	//Create a tube (cylinder) around the line
+	vtkSmartPointer<vtkTubeFilter> tubeFilter = 
+		vtkSmartPointer<vtkTubeFilter>::New();
+	//tubeFilter->SetInputData(_lines);		
+	tubeFilter->SetInputConnection(stripperFilter->GetOutputPort());
+	tubeFilter->SetRadius(4); //default is .5
+	tubeFilter->SetNumberOfSides(50);
+	tubeFilter->Update();
+
+	//	handTransformFilter->SetInputConnection(m_vtkGlyph3D->GetOutputPort());
+	leapTransformFilter->SetInputConnection(tubeFilter->GetOutputPort());
+	//handTransformFilter->SetInputData(_lines);
+	leapTransformFilter->Update();
 
 	vtkSmartPointer<vtkPolyDataMapper> polyMapper = vtkPolyDataMapper::New();
-	polyMapper->SetInputConnection(transformFilter->GetOutputPort());
+	polyMapper->SetInputConnection(leapTransformFilter->GetOutputPort());//handTransformFilter->GetOutputPort());
 	vtkSmartPointer<vtkActor> polyActor = 
 		vtkSmartPointer<vtkActor>::New();
 	polyActor->SetMapper(polyMapper);
+	polyActor->GetProperty()->SetColor(0.0,0.8,0.8); // Give some color to the line
 	return polyActor;
 }
 
@@ -234,9 +408,11 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	vtkRenderWindowInteractor *irenVol = this->ui->view1->GetInteractor();
 
 	// Add the volume to the scene
-	vtkSmartPointer<vtkActor> outlineActor = AddOutline(reader);
-	renVol->AddVolume( AddVolume(reader) );
-	renVol->AddActor(outlineActor);
+	_outlineActor = AddOutline(reader);
+	
+	_volume =  AddVolume(reader) ;
+	renVol->AddVolume(_volume );
+	renVol->AddActor(_outlineActor);
 
 	AddPlaneWidget(reader, irenVol);
 
@@ -247,7 +423,7 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	inputVolume->GetCenter(dataCenter);
 
 	camera = vtkSmartPointer<vtkCamera>::New();
-	camera->SetPosition(dataCenter[0], dataCenter[1] + 600 , dataCenter[2] + 0.1);
+	camera->SetPosition(dataCenter[0], dataCenter[1] + 800 , dataCenter[2] + 0.1);
 	camera->SetFocalPoint(dataCenter);//, 0, 0);
 	renVol->SetActiveCamera(camera);
 
@@ -263,6 +439,22 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	cameraGlobe->SetPosition(dataCenter[0], dataCenter[1] + 5 , dataCenter[2] + 0.001);
 	cameraGlobe->SetFocalPoint(dataCenter);//, 0, 0);
 	renGlobe->SetActiveCamera(cameraGlobe);
+
+
+	//plane
+	// The callback will do the work
+	//vtkSmartPointer<vtkPlane> plane =
+	//	vtkSmartPointer<vtkPlane>::New();
+	////vtkSmartPointer<vtkClipPolyData> clipper =
+	////	vtkSmartPointer<vtkClipPolyData>::New();
+	////clipper->SetClipFunction(plane);
+	//vtkSmartPointer<vtkIPWCallback> myCallback = 
+	//	vtkSmartPointer<vtkIPWCallback>::New();
+	//myCallback->Plane = plane;
+	////myCallback->Actor = actor;
+
+	qRegisterMetaType<TypeArray>("TypeArray");
+	qRegisterMetaType<TypeArray2>("TypeArray2");
 
 	// Set up action signals and slots
 	connect(this->ui->actionExit, SIGNAL(triggered()), this, SLOT(slotExit()));
@@ -283,6 +475,9 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	connect(&listener, SIGNAL(UpdateLine(QVector3D, QVector3D)), 
 		this, SLOT(UpdateLine(QVector3D, QVector3D)));
 
+	connect(&listener, SIGNAL(UpdateSkeletonHand(TypeArray2, TypeArray)), 
+		this, SLOT(UpdateSkeletonHand(TypeArray2, TypeArray)), Qt::QueuedConnection);
+
 	vtkSmartPointer<vtkEventQtSlotConnect> m_connections = vtkEventQtSlotConnect::New();
 	m_connections->Connect(irenVol, vtkCommand::KeyPressEvent, 
 		this, SLOT(slotKeyPressed(vtkObject*, unsigned long, void*, void*, vtkCommand*)), 0, 1.0); 
@@ -291,6 +486,7 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 
 
 	renVol->AddActor(GetHandsActor());
+	//	renVol->AddActor(lineActor);
 };
 
 void QtVTKRenderWindows::slotExit()
@@ -316,14 +512,57 @@ void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3
 	inputVolume->GetCenter(dataCenter);
 	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);
 
+	origin = m * origin;
+	origin += QVector3D(100, 100,300);
+	//cout<<"origin1:"<<origin.x()<<"\t"<<origin.y()<<"\t"<<origin.z()<<endl;
+	origin = QVector3D(	origin.x() * dataCenter[0] / 100,
+		origin.y() * dataCenter[1] / 100,
+		origin.z() * dataCenter[2] / 100);
+	//cout<<"origin2:"<<origin.x()<<"\t"<<origin.y()<<"\t"<<origin.z()<<endl;
 
-	QVector3D viewDir = m * handTranslation * ( QVector3D(0,0,-1));
-	//fixing the camera distance is a good idea
-	QVector3D cameraPos = dataCenterQ/* - 8 * m  * origin */ - viewDir * 600;
-	camera->SetPosition(cameraPos.x(), cameraPos.y(), cameraPos.z());
+	//line->SetPoint2(origin.x(), origin.y(), origin.z());
 
-	QVector3D viewUp = m * handTranslation * yDir;
-	camera->SetViewUp(viewUp.x(), viewUp.y(), viewUp.z());
+
+	//QVector3D viewDir = m * handTranslation * ( QVector3D(0,0,-1));
+	////fixing the camera distance is a good idea
+	//QVector3D cameraPos = dataCenterQ/* - 8 * m  * origin */ - viewDir * 600;
+	////camera->SetPosition(cameraPos.x(), cameraPos.y(), cameraPos.z());
+
+	//QVector3D viewUp = m * handTranslation * yDir;
+	//camera->SetViewUp(viewUp.x(), viewUp.y(), viewUp.z());
+
+	//QMatrix4x4 handrotateMatrix = handTranslation.inverted();
+	//handTransform->SetMatrix(QMatrix2vtkMatrix(handrotateMatrix));
+
+	////	vtkSmartPointer<vtkLineSource> line = vtkLineSource::New();
+	////line->SetPoint1(0, 0, 0);
+	////line->SetPoint2(50, 50,50);
+
+
+	//handTransformFilter->SetTransform(handTransform);
+	////handTransformFilter->SetInputConnection(line->GetOutputPort());
+	vtkSmartPointer<vtkTransform> handTransform = vtkSmartPointer<vtkTransform>::New();
+	vtkSmartPointer<vtkTransform> volumeTransform = vtkSmartPointer<vtkTransform>::New();
+
+	/*double dataCenter[3];
+	inputVolume->GetCenter(dataCenter);
+	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);*/
+
+	volumeTransform->PostMultiply();
+	volumeTransform->Translate(-dataCenter[0], -dataCenter[1], -dataCenter[2]);
+	volumeTransform->Concatenate(QMatrix2vtkMatrix(m.inverted()));
+	volumeTransform->Concatenate(QMatrix2vtkMatrix(handTranslation.inverted()));
+	volumeTransform->Concatenate(QMatrix2vtkMatrix(m));
+	volumeTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
+
+	//repPlane->UpdatePlacement();
+	//repPlane->Modified();
+	////repPlane->PlaceWidget(_outlineActor->GetBounds());
+	//implicitPlaneWidget->Modified();
+	//repPlane->
+	_volume->SetUserTransform(volumeTransform);
+	_outlineActor->SetUserTransform(volumeTransform);
+
 
 	this->ui->view1->repaint();
 }
@@ -382,4 +621,37 @@ void QtVTKRenderWindows::UpdateLine(QVector3D point1, QVector3D point2)
 	lineWidget->SetPoint1(point1.x(), point1.y(), point1.z());
 	point2 = NormlizedLeapCoords2DataCoords(point2);
 	lineWidget->SetPoint2(point2.x(), point2.y(), point2.z());
+}
+
+void QtVTKRenderWindows::UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm )
+{
+
+	if(fingers.size() == 0)
+		return;
+	QVector<QVector<QVector3D>> tmp = fingers;
+	//oneSphere->SetCenter(v.x(), v.y(), v.z());
+	//m_vtkCenterPoints->Resize(0);
+	//m_vtkCenterPolyData->Reset();
+	//m_vtkCenterPoints->InsertNextPoint(50,50,50);
+	//handTransformFilter->Update();
+	int k = 0;
+
+	int nCells = 0;
+	for(int i = 0; i < fingers.size(); i++)
+	{
+		//	cout<<"sizes:"<<i<<","<<fingers[i].size()<<endl;
+		for(int j = 0; j < fingers[i].size(); j++)	{
+			QVector3D v = fingers[i][j];
+			//	_fingerSpheres[k]->SetCenter(v.x(), v.y(), v.z());
+			m_vtkCenterPolyData->GetPoints()->SetPoint(k++, v.x(), v.y(), v.z());
+		}
+	}
+	for(int i = 0; i < palm.size(); i++)	{
+		QVector3D v = palm[i];
+		m_vtkCenterPolyData->GetPoints()->SetPoint(k++, v.x(), v.y(), v.z());
+	}
+	//http://www.paraview.org/Wiki/VTK/Examples/Cxx/Interaction/MoveAGlyph
+	m_vtkCenterPolyData->Modified();
+	_lines->Modified();
+	this->ui->view1->repaint();
 }
