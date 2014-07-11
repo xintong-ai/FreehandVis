@@ -75,7 +75,8 @@ inline void GetSpace(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &xDir
 	yDir = xDir.cross(dirLeft).normalized();
 	zDir = xDir.cross(yDir);
 
-	origin = frame.hands().rightmost().fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();//hand.palmPosition();
+	origin = frame.hands().leftmost().fingers().fingerType(Leap::Finger::Type::TYPE_MIDDLE).frontmost().bone(Leap::Bone::Type::TYPE_PROXIMAL).prevJoint();//hand.palmPosition();
+	//origin = hand.palmPosition();
 
 	//cout<<"**origin:"<<origin.x<<","<<origin.y<<","<<origin.z<<endl;
 	//cout<<"**point1:"<<point1.x<<","<<point1.y<<","<<point1.z<<endl;

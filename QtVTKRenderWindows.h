@@ -1,4 +1,4 @@
-#ifndef QtVTKRenderWindows_H
+﻿#ifndef QtVTKRenderWindows_H
 #define QtVTKRenderWindows_H
 
 #include <QMatrix4x4>
@@ -126,6 +126,9 @@ private:
 
 	//rotate
 	vtkSmartPointer<vtkActor> _outlineActor;
+	QVector3D LeapCoords2DataCoords(QVector3D v);
+	QVector3D LeapVec2DataVec(QVector3D v);
+	vtkSmartPointer<vtkTransform> volumeTransform;
 };
 
 #endif // QtVTKRenderWindows_H

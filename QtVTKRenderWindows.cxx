@@ -186,7 +186,7 @@ void QtVTKRenderWindows::AddPlaneWidget(vtkSmartPointer<vtkImageAlgorithm> reade
 	//http://www.cnblogs.com/dawnWind/archive/2013/05/04/3D_11.html
 	//http://www.vtk.org/Wiki/VTK/Examples/Cxx/Widgets/ImplicitPlaneWidget2
 	repPlane = vtkSmartPointer<vtkImplicitPlaneRepresentation>::New();
-	repPlane->SetPlaceFactor(1.1); // This must be set prior to placing the widget
+	repPlane->SetPlaceFactor(1.5); // This must be set prior to placing the widget
 	repPlane->PlaceWidget(_outlineActor->GetBounds());
 	/*repPlane->OutsideBoundsOff();
 	repPlane->UseBoundsOff();*/
@@ -210,6 +210,8 @@ vtkSmartPointer<vtkMatrix4x4> QMatrix2vtkMatrix(QMatrix4x4 v)
 	return ret;
 }
 
+
+
 vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 {
 
@@ -222,9 +224,10 @@ vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 
 	_leapTransform->PostMultiply();
 	_leapTransform->SetMatrix(QMatrix2vtkMatrix(m));
-	_leapTransform->Translate(100, 100, 300);
-	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100;
+	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
+	_leapTransform->Translate(0, 0, 300);		//the volume is 300 mm above the device
 	_leapTransform->Scale(scaleFactor, scaleFactor, scaleFactor);
+	_leapTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
 
 	vtkSmartPointer<vtkTransformPolyDataFilter> leapTransformFilter = 
 		vtkSmartPointer<vtkTransformPolyDataFilter>::New();
@@ -238,7 +241,7 @@ vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 	m_vtkGlyph3D = vtkGlyph3D::New();
 	for(int i = 0; i < 26; i++)
 		m_vtkCenterPoints->InsertNextPoint(10,10,10);
-	
+
 	m_vtkCenterPolyData->SetPoints(m_vtkCenterPoints);
 	m_vtkGlyph3D->SetSourceConnection(m_vtkSphereSource->GetOutputPort());
 	m_vtkGlyph3D->SetInputData(m_vtkCenterPolyData);
@@ -393,7 +396,7 @@ vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 
 QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 {
-	m.rotate(- 90, 1.0, 0.0, 0.0);
+	m.rotate(-90, 1.0, 0.0, 0.0);
 
 	this->ui = new Ui_QtVTKRenderWindows;
 	this->ui->setupUi(this);
@@ -409,7 +412,7 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 
 	// Add the volume to the scene
 	_outlineActor = AddOutline(reader);
-	
+
 	_volume =  AddVolume(reader) ;
 	renVol->AddVolume(_volume );
 	renVol->AddActor(_outlineActor);
@@ -487,6 +490,8 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 
 	renVol->AddActor(GetHandsActor());
 	//	renVol->AddActor(lineActor);
+	volumeTransform = vtkSmartPointer<vtkTransform>::New();
+
 };
 
 void QtVTKRenderWindows::slotExit()
@@ -501,6 +506,36 @@ void QtVTKRenderWindows::slotKeyPressed(vtkObject *a, unsigned long b, void *c, 
 	cameraGlobe->PrintSelf(cout,  aa);
 }
 
+QVector3D QtVTKRenderWindows::LeapVec2DataVec(QVector3D v)
+{
+	double dataCenter[3];
+	inputVolume->GetCenter(dataCenter);
+	v = m * v;
+	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
+	v = v * scaleFactor;
+	return v;
+
+}
+
+QVector3D QtVTKRenderWindows::LeapCoords2DataCoords(QVector3D v)
+{
+	//_leapTransform->SetMatrix(QMatrix2vtkMatrix(m));
+	//float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
+	//_leapTransform->Translate(0, 0, 300);		//the volume is 300 mm above the device
+	//_leapTransform->Scale(scaleFactor, scaleFactor, scaleFactor);
+	//_leapTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
+
+	double dataCenter[3];
+	inputVolume->GetCenter(dataCenter);
+	v = m * v;
+	v += QVector3D(0, 0,300);
+	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
+	v = v * scaleFactor;
+	v += QVector3D(dataCenter[0], dataCenter[1], dataCenter[2]);
+	return v;
+
+}
+
 void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir)
 {
 	handTranslation.setToIdentity();
@@ -512,54 +547,38 @@ void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3
 	inputVolume->GetCenter(dataCenter);
 	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);
 
-	origin = m * origin;
-	origin += QVector3D(100, 100,300);
-	//cout<<"origin1:"<<origin.x()<<"\t"<<origin.y()<<"\t"<<origin.z()<<endl;
-	origin = QVector3D(	origin.x() * dataCenter[0] / 100,
-		origin.y() * dataCenter[1] / 100,
-		origin.z() * dataCenter[2] / 100);
-	//cout<<"origin2:"<<origin.x()<<"\t"<<origin.y()<<"\t"<<origin.z()<<endl;
+	//origin = m * origin;
+	//origin += QVector3D(100, 100,300);
+	////cout<<"origin1:"<<origin.x()<<"\t"<<origin.y()<<"\t"<<origin.z()<<endl;
+	//origin = QVector3D(	origin.x() * dataCenter[0] / 100,
+	//	origin.y() * dataCenter[1] / 100,
+	//	origin.z() * dataCenter[2] / 100);
+	origin = LeapCoords2DataCoords(origin);
 
-	//line->SetPoint2(origin.x(), origin.y(), origin.z());
-
-
-	//QVector3D viewDir = m * handTranslation * ( QVector3D(0,0,-1));
-	////fixing the camera distance is a good idea
-	//QVector3D cameraPos = dataCenterQ/* - 8 * m  * origin */ - viewDir * 600;
-	////camera->SetPosition(cameraPos.x(), cameraPos.y(), cameraPos.z());
-
-	//QVector3D viewUp = m * handTranslation * yDir;
-	//camera->SetViewUp(viewUp.x(), viewUp.y(), viewUp.z());
-
-	//QMatrix4x4 handrotateMatrix = handTranslation.inverted();
-	//handTransform->SetMatrix(QMatrix2vtkMatrix(handrotateMatrix));
-
-	////	vtkSmartPointer<vtkLineSource> line = vtkLineSource::New();
-	////line->SetPoint1(0, 0, 0);
-	////line->SetPoint2(50, 50,50);
-
-
-	//handTransformFilter->SetTransform(handTransform);
-	////handTransformFilter->SetInputConnection(line->GetOutputPort());
 	vtkSmartPointer<vtkTransform> handTransform = vtkSmartPointer<vtkTransform>::New();
-	vtkSmartPointer<vtkTransform> volumeTransform = vtkSmartPointer<vtkTransform>::New();
 
-	/*double dataCenter[3];
-	inputVolume->GetCenter(dataCenter);
-	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);*/
+	//this point is the origin of rotation in the data space,
+	//which attaches to the hand center
+	QVector3D fixPoint = LeapVec2DataVec(QVector3D(-150, 0, 0));
 
+	bool withTranslation = true;
 	volumeTransform->PostMultiply();
+	volumeTransform->Identity();
+	if(withTranslation)
+	{
+		volumeTransform->Translate(-fixPoint[0], -fixPoint[1], -fixPoint[2]);
+	}
 	volumeTransform->Translate(-dataCenter[0], -dataCenter[1], -dataCenter[2]);
+
 	volumeTransform->Concatenate(QMatrix2vtkMatrix(m.inverted()));
 	volumeTransform->Concatenate(QMatrix2vtkMatrix(handTranslation.inverted()));
 	volumeTransform->Concatenate(QMatrix2vtkMatrix(m));
-	volumeTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
 
-	//repPlane->UpdatePlacement();
-	//repPlane->Modified();
-	////repPlane->PlaceWidget(_outlineActor->GetBounds());
-	//implicitPlaneWidget->Modified();
-	//repPlane->
+	if(withTranslation)
+		volumeTransform->Translate(origin.x(), origin.y(), origin.z());
+	else
+		volumeTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
+
 	_volume->SetUserTransform(volumeTransform);
 	_outlineActor->SetUserTransform(volumeTransform);
 
