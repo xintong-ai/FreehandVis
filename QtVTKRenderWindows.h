@@ -46,7 +46,7 @@
 #include "LeapListener.h"
 
 //primitives
-//#include "vtkLineSource.h"
+#include "vtkLineSource.h"
 #include "vtkTransform.h"
 //#include "vtkPointSource.h"
 #include "vtkSphereSource.h"
@@ -57,11 +57,25 @@
 #include "vtkLine.h"
 #include "vtkProperty.h"
 #include "vtkStripper.h"
-
+#include "HandWidget.h"
+#include "vtkCubeSource.h"
 
 // Forward Qt class declarations
 class Ui_QtVTKRenderWindows;
 
+inline vtkSmartPointer<vtkMatrix4x4> QMatrix2vtkMatrix(QMatrix4x4 v)
+{
+
+	float data[16];
+	v.copyDataTo(data);
+	vtkSmartPointer<vtkMatrix4x4> ret = vtkMatrix4x4::New();
+	for(int i = 0; i < 4; i++)	{
+		for(int j = 0; j < 4; j++)	{
+			ret->SetElement(i, j, data[i * 4 + j]);
+		}
+	}
+	return ret;
+}
 
 class QtVTKRenderWindows : public QMainWindow
 {
@@ -81,6 +95,7 @@ public:
 		void UpdateCameraGlobe(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 		void UpdatePlane(QVector3D origin, QVector3D normal);
 		void UpdateLine(QVector3D point1, QVector3D point2);
+		void UpdateGesture(int gesture);
 protected:
 
 	LeapListener listener;
@@ -95,6 +110,7 @@ private:
 	void AddBoxWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
 	void AddLineWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
 	void AddPlaneWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
+	void AddCube();
 
 	QVector3D NormlizedLeapCoords2DataCoords(QVector3D p);
 	vtkSmartPointer<vtkCamera> camera;
@@ -126,9 +142,21 @@ private:
 
 	//rotate
 	vtkSmartPointer<vtkActor> _outlineActor;
-	QVector3D LeapCoords2DataCoords(QVector3D v);
-	QVector3D LeapVec2DataVec(QVector3D v);
 	vtkSmartPointer<vtkTransform> volumeTransform;
+
+	HandWidget _hw;
+
+	//cube
+	vtkSmartPointer<vtkCubeSource> _cube;
+	vtkSmartPointer<vtkActor> _cubeActor;
+
+	//line
+	vtkSmartPointer<vtkLineSource> _dirLines[3];
+	vtkSmartPointer<vtkActor> _dirLinesActor[3];
+
+	//snapping plane
+	vtkSmartPointer<vtkPlaneSource> _snappingPlane;
+	vtkSmartPointer<vtkActor> _snappingPlaneActor;
 };
 
 #endif // QtVTKRenderWindows_H

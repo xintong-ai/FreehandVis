@@ -72,8 +72,8 @@ inline void GetSpace(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &xDir
 	Leap::Hand hand = frame.hands().leftmost();
 	Leap::Vector dirLeft = hand.direction().normalized();
 	xDir = hand.palmNormal().normalized();
-	yDir = xDir.cross(dirLeft).normalized();
-	zDir = xDir.cross(yDir);
+	zDir = dirLeft.cross(xDir).normalized();
+	yDir = zDir.cross(xDir);
 
 	origin = frame.hands().leftmost().fingers().fingerType(Leap::Finger::Type::TYPE_MIDDLE).frontmost().bone(Leap::Bone::Type::TYPE_PROXIMAL).prevJoint();//hand.palmPosition();
 	//origin = hand.palmPosition();
@@ -141,6 +141,79 @@ inline void GetTool(Leap::Frame frame, Leap::Vector &origin, Leap::Vector &dir)
 	dir = pointingFinger.direction().normalized();
 }
 
+inline int GetGesture(Leap::Frame frame)
+{
+	const Leap::GestureList gestures = frame.gestures();
+	int ret = 0;
+	for (int g = 0; g < gestures.count(); ++g) {
+		Leap::Gesture gesture = gestures[g];
+
+		switch (gesture.type()) {
+		case Leap::Gesture::TYPE_CIRCLE:
+			{
+				//CircleGesture circle = gesture;
+				//std::string clockwiseness;
+
+				//if (circle.pointable().direction().angleTo(circle.normal()) <= PI/2) {
+				//  clockwiseness = "clockwise";
+				//} else {
+				//  clockwiseness = "counterclockwise";
+				//}
+
+				//// Calculate angle swept since last frame
+				//float sweptAngle = 0;
+				//if (circle.state() != Gesture::STATE_START) {
+				//  CircleGesture previousUpdate = CircleGesture(controller.frame(1).gesture(circle.id()));
+				//  sweptAngle = (circle.progress() - previousUpdate.progress()) * 2 * PI;
+				//}
+				//std::cout << std::string(2, ' ')
+				//          << "Circle id: " << gesture.id()
+				//          << ", state: " << stateNames[gesture.state()]
+				//          << ", progress: " << circle.progress()
+				//          << ", radius: " << circle.radius()
+				//          << ", angle " << sweptAngle * RAD_TO_DEG
+				//          <<  ", " << clockwiseness << std::endl;
+				break;
+			}
+		case Leap::Gesture::TYPE_SWIPE:
+			{
+				//SwipeGesture swipe = gesture;
+				//std::cout << std::string(2, ' ')
+				//  << "Swipe id: " << gesture.id()
+				//  << ", state: " << stateNames[gesture.state()]
+				//  << ", direction: " << swipe.direction()
+				//  << ", speed: " << swipe.speed() << std::endl;
+				break;
+			}
+		case Leap::Gesture::TYPE_KEY_TAP:
+			{
+				//KeyTapGesture tap = gesture;
+				//std::cout << std::string(2, ' ')
+				//	<< "Key Tap id: " << gesture.id()
+				//	<< ", state: " << stateNames[gesture.state()]
+				//<< ", position: " << tap.position()
+				//	<< ", direction: " << tap.direction()<< std::endl;'
+				ret = 1;
+				break;
+			}
+		case Leap::Gesture::TYPE_SCREEN_TAP:
+			{
+				//ScreenTapGesture screentap = gesture;
+				//std::cout << std::string(2, ' ')
+				//  << "Screen Tap id: " << gesture.id()
+				//  << ", state: " << stateNames[gesture.state()]
+				//  << ", position: " << screentap.position()
+				//  << ", direction: " << screentap.direction()<< std::endl;
+				break;
+			}
+		default:
+			//std::cout << std::string(2, ' ')  << "Unknown gesture type." << std::endl;
+			break;
+		}
+	}
+	return ret;
+}
+
 inline void GetTwoPoints(Leap::Frame frame, Leap::Vector &point1, Leap::Vector &point2)
 {
 	Leap::Vector thumbTip = frame.hands().rightmost().fingers().fingerType(Leap::Finger::Type::TYPE_THUMB).frontmost().tipPosition();
@@ -206,16 +279,16 @@ inline void GetSkeletonHand(Leap::Hand hand, std::vector<std::vector<Leap::Vecto
 	}
 
 	// close the metacarpal box
-    fRadius = fingers[Leap::Finger::TYPE_THUMB].width() * 0.5f;
-    vCurBoxBase = vWrist;
-    //glColor4fv(vBoneColor);
-    //drawCylinder(kStyle_Solid, vCurBoxBase, vLastBoxBase, kfBoneRadiusScale*fRadius);
-    //glColor4fv(vJointColor);
-    //drawSphere(kStyle_Solid, vCurBoxBase, kfJointRadiusScale*fRadius);
+	fRadius = fingers[Leap::Finger::TYPE_THUMB].width() * 0.5f;
+	vCurBoxBase = vWrist;
+	//glColor4fv(vBoneColor);
+	//drawCylinder(kStyle_Solid, vCurBoxBase, vLastBoxBase, kfBoneRadiusScale*fRadius);
+	//glColor4fv(vJointColor);
+	//drawSphere(kStyle_Solid, vCurBoxBase, kfJointRadiusScale*fRadius);
 	palm.push_back(vCurBoxBase);
-    // draw palm position
-    //glColor4fv(vJointColor);
-    //drawSphere(kStyle_Solid, vPalm, kfPalmRadiusScale*fRadius);
+	// draw palm position
+	//glColor4fv(vJointColor);
+	//drawSphere(kStyle_Solid, vPalm, kfPalmRadiusScale*fRadius);
 
 }
 

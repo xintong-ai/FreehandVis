@@ -2,25 +2,6 @@
 #include "QtVTKRenderWindows.h"
 #include "qlabel.h"
 
-class vtkIPWCallback : public vtkCommand
-{
-public:
-	static vtkIPWCallback *New() 
-	{ return new vtkIPWCallback; }
-	virtual void Execute(vtkObject *caller, unsigned long, void*)
-	{
-		vtkImplicitPlaneWidget2 *planeWidget = 
-			reinterpret_cast<vtkImplicitPlaneWidget2*>(caller);
-		vtkImplicitPlaneRepresentation *rep = 
-			reinterpret_cast<vtkImplicitPlaneRepresentation*>(planeWidget->GetRepresentation());
-		rep->GetPlane(this->Plane);
-	}
-	vtkIPWCallback():Plane(0),Actor(0) {}
-	vtkPlane *Plane;
-	vtkActor *Actor;
-
-};
-
 vtkSmartPointer<vtkImageAlgorithm> ReadImageData(int argc, char *argv[])
 {
 	int count = 1;
@@ -117,6 +98,33 @@ vtkSmartPointer<vtkActor> AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader)
 	return outlineActor;
 }
 
+void QtVTKRenderWindows::AddCube()
+{
+	_cube = vtkCubeSource::New();
+	//_cube->set
+	float cubeHalfSize = _hw.GetCubeSize() * 0.5;
+	float dataCenter[3];
+	_hw.GetDataCenter(dataCenter);
+	_cube->SetBounds(
+		dataCenter[0] - cubeHalfSize, 
+		dataCenter[0] + cubeHalfSize, 
+		dataCenter[1] - cubeHalfSize, 
+		dataCenter[1] + cubeHalfSize, 
+		dataCenter[2] - cubeHalfSize, 
+		dataCenter[2] + cubeHalfSize);
+
+	//Create a mapper and actor
+	vtkSmartPointer<vtkPolyDataMapper> cubeMapper = 
+		vtkSmartPointer<vtkPolyDataMapper>::New();
+	cubeMapper->SetInputConnection(_cube->GetOutputPort());
+	//cubeMapper->
+	_cubeActor = 
+		vtkSmartPointer<vtkActor>::New();
+	_cubeActor->VisibilityOff();
+	_cubeActor->SetMapper(cubeMapper);
+	_cubeActor->GetProperty()->SetRepresentationToWireframe();
+}
+
 vtkSmartPointer<vtkActor> QtVTKRenderWindows::AddEarth()
 {
 	//earth
@@ -154,15 +162,10 @@ vtkSmartPointer<vtkActor> QtVTKRenderWindows::AddEarth()
 void QtVTKRenderWindows::AddBoxWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor)
 {
 	vtkSmartPointer<vtkBoxWidget> boxWidget = vtkBoxWidget::New();
-	/*vtkSmartPointer<vtkBoxRepresentation> boxRep = vtkBoxRepresentation::New();
-	boxRep->SetPlaceFactor(0.75);*/
-	//boxRep->PlaceWidget(reader->GetOutput()->GetBounds());
 	boxWidget->SetInputConnection(reader->GetOutputPort());
 	boxWidget->PlaceWidget();
 	boxWidget->SetInteractor(interactor);
-	//boxWidget->SetRepresentation(boxRep);
 	boxWidget->On();
-	//boxWidget->rotate
 }
 
 void QtVTKRenderWindows::AddLineWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor)
@@ -176,8 +179,6 @@ void QtVTKRenderWindows::AddLineWidget(vtkSmartPointer<vtkImageAlgorithm> reader
 	lineWidget->SetClampToBounds(1);
 	lineWidget->SetInteractor(interactor);
 	lineWidget->On();
-
-
 }
 
 void QtVTKRenderWindows::AddPlaneWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor)
@@ -196,36 +197,19 @@ void QtVTKRenderWindows::AddPlaneWidget(vtkSmartPointer<vtkImageAlgorithm> reade
 	implicitPlaneWidget->On();
 }
 
-vtkSmartPointer<vtkMatrix4x4> QMatrix2vtkMatrix(QMatrix4x4 v)
-{
-
-	float data[16];
-	v.copyDataTo(data);
-	vtkSmartPointer<vtkMatrix4x4> ret = vtkMatrix4x4::New();
-	for(int i = 0; i < 4; i++)	{
-		for(int j = 0; j < 4; j++)	{
-			ret->SetElement(i, j, data[i * 4 + j]);
-		}
-	}
-	return ret;
-}
-
-
-
 vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 {
 
 	////////transform
 	_leapTransform = vtkSmartPointer<vtkTransform>::New();
 
-	double dataCenter[3];
-	inputVolume->GetCenter(dataCenter);
-	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);
+	float dataCenter[3];
+	_hw.GetDataCenter(dataCenter);
 
 	_leapTransform->PostMultiply();
-	_leapTransform->SetMatrix(QMatrix2vtkMatrix(m));
-	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
-	_leapTransform->Translate(0, 0, 300);		//the volume is 300 mm above the device
+	_leapTransform->SetMatrix(QMatrix2vtkMatrix(_hw.GetDataOrientation()));
+	_leapTransform->Translate(0, 0, _hw.GetLeapDataHeight());		//the volume center is 200 mm above the device
+	float scaleFactor = _hw.GetMaxDataSize() / _hw.GetLeapDataSize();	//the side of the cube is 100 mm
 	_leapTransform->Scale(scaleFactor, scaleFactor, scaleFactor);
 	_leapTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
 
@@ -256,6 +240,7 @@ vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 
 	vtkSmartPointer<vtkLine> line = 
 		vtkSmartPointer<vtkLine>::New();
+
 	line->GetPointIds()->SetId(0,0);
 	line->GetPointIds()->SetId(1,1);
 	lineCell->InsertNextCell(line);
@@ -410,6 +395,50 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	this->ui->view1->GetRenderWindow()->AddRenderer(renVol);
 	vtkRenderWindowInteractor *irenVol = this->ui->view1->GetInteractor();
 
+	//direction lines
+	_dirLines[0] = vtkLineSource::New();
+	_dirLines[1] = vtkLineSource::New();
+	_dirLines[2] = vtkLineSource::New();
+
+	_dirLines[0]->SetPoint1(0, 0, 0);
+	_dirLines[1]->SetPoint1(0, 0, 0);
+	_dirLines[2]->SetPoint1(0, 0, 0);
+
+	_dirLines[0]->SetPoint2(100, 0, 0);
+	_dirLines[1]->SetPoint2(0, 100, 0);
+	_dirLines[2]->SetPoint2(0, 0, 100);
+
+	vtkSmartPointer<vtkPolyDataMapper> dirLinesMapper[3];
+	dirLinesMapper[0] = vtkPolyDataMapper::New();
+	dirLinesMapper[1] = vtkPolyDataMapper::New();
+	dirLinesMapper[2] = vtkPolyDataMapper::New();
+
+	dirLinesMapper[0]->SetInputConnection(_dirLines[0]->GetOutputPort());
+	dirLinesMapper[1]->SetInputConnection(_dirLines[1]->GetOutputPort());
+	dirLinesMapper[2]->SetInputConnection(_dirLines[2]->GetOutputPort());
+
+	_dirLinesActor[0] = vtkActor::New();
+	_dirLinesActor[1] = vtkActor::New();
+	_dirLinesActor[2] = vtkActor::New();
+
+	_dirLinesActor[0]->SetMapper(dirLinesMapper[0]);
+	_dirLinesActor[1]->SetMapper(dirLinesMapper[1]);
+	_dirLinesActor[2]->SetMapper(dirLinesMapper[2]);
+
+	_dirLinesActor[0]->GetProperty()->SetColor(1, 0, 0);
+	_dirLinesActor[1]->GetProperty()->SetColor(0, 1, 0);
+	_dirLinesActor[2]->GetProperty()->SetColor(0, 0, 1);
+
+	_dirLinesActor[0]->GetProperty()->SetLineWidth(4);
+	_dirLinesActor[1]->GetProperty()->SetLineWidth(4);
+	_dirLinesActor[2]->GetProperty()->SetLineWidth(4);
+
+	renVol->AddActor(_dirLinesActor[0]);
+	renVol->AddActor(_dirLinesActor[1]);
+	renVol->AddActor(_dirLinesActor[2]);
+
+
+
 	// Add the volume to the scene
 	_outlineActor = AddOutline(reader);
 
@@ -425,10 +454,37 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	double dataCenter[3];
 	inputVolume->GetCenter(dataCenter);
 
+	_hw.SetDataSize(dataCenter[0] * 2, dataCenter[1] * 2, dataCenter[2] * 2);
+
+	AddCube();
+	renVol->AddActor(_cubeActor);
+
+
 	camera = vtkSmartPointer<vtkCamera>::New();
 	camera->SetPosition(dataCenter[0], dataCenter[1] + 800 , dataCenter[2] + 0.1);
 	camera->SetFocalPoint(dataCenter);//, 0, 0);
 	renVol->SetActiveCamera(camera);
+
+	
+	//snapping plane
+	_snappingPlane = vtkSmartPointer<vtkPlaneSource>::New(); 
+	_snappingPlane->SetOrigin(0, 0, 0); 
+	//planesrc->SetNormal(planeN); 
+	_snappingPlane->SetPoint1(0, dataCenter[1] * 2, 0);
+	_snappingPlane->SetPoint2(0, 0, dataCenter[2] * 2);
+	_snappingPlane->Update(); 
+
+	vtkSmartPointer<vtkPolyDataMapper> snappingPlaneMapper;
+	snappingPlaneMapper = vtkPolyDataMapper::New();
+	snappingPlaneMapper->SetInputConnection(_snappingPlane->GetOutputPort());
+
+	_snappingPlaneActor = vtkActor::New();
+	_snappingPlaneActor->SetMapper(snappingPlaneMapper);
+	_snappingPlaneActor->GetProperty()->SetColor(1, 1, 1);
+	_snappingPlaneActor->GetProperty()->LightingOff();
+	_snappingPlaneActor->GetProperty()->SetOpacity(0.5);
+	renVol->AddActor(_snappingPlaneActor);
+
 
 	//second rendering window
 	vtkSmartPointer< vtkRenderer > renGlobe =
@@ -443,19 +499,6 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	cameraGlobe->SetFocalPoint(dataCenter);//, 0, 0);
 	renGlobe->SetActiveCamera(cameraGlobe);
 
-
-	//plane
-	// The callback will do the work
-	//vtkSmartPointer<vtkPlane> plane =
-	//	vtkSmartPointer<vtkPlane>::New();
-	////vtkSmartPointer<vtkClipPolyData> clipper =
-	////	vtkSmartPointer<vtkClipPolyData>::New();
-	////clipper->SetClipFunction(plane);
-	//vtkSmartPointer<vtkIPWCallback> myCallback = 
-	//	vtkSmartPointer<vtkIPWCallback>::New();
-	//myCallback->Plane = plane;
-	////myCallback->Actor = actor;
-
 	qRegisterMetaType<TypeArray>("TypeArray");
 	qRegisterMetaType<TypeArray2>("TypeArray2");
 
@@ -465,6 +508,9 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	controller.addListener(listener);
 	this->ui->label_observer->connect(&listener, SIGNAL(objectNameChanged(QString)),
 		SLOT(setText(QString)));
+
+	controller.enableGesture(Leap::Gesture::TYPE_KEY_TAP);
+
 
 	connect(&listener, SIGNAL(UpdateCamera(QVector3D, QVector3D, QVector3D, QVector3D)), 
 		this, SLOT(UpdateCamera(QVector3D, QVector3D, QVector3D, QVector3D)));
@@ -481,6 +527,9 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	connect(&listener, SIGNAL(UpdateSkeletonHand(TypeArray2, TypeArray)), 
 		this, SLOT(UpdateSkeletonHand(TypeArray2, TypeArray)), Qt::QueuedConnection);
 
+	connect(&listener, SIGNAL(UpdateGesture(int)), 
+		this, SLOT(UpdateGesture(int)));
+
 	vtkSmartPointer<vtkEventQtSlotConnect> m_connections = vtkEventQtSlotConnect::New();
 	m_connections->Connect(irenVol, vtkCommand::KeyPressEvent, 
 		this, SLOT(slotKeyPressed(vtkObject*, unsigned long, void*, void*, vtkCommand*)), 0, 1.0); 
@@ -491,6 +540,7 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	renVol->AddActor(GetHandsActor());
 	//	renVol->AddActor(lineActor);
 	volumeTransform = vtkSmartPointer<vtkTransform>::New();
+
 
 };
 
@@ -503,85 +553,45 @@ void QtVTKRenderWindows::slotExit()
 void QtVTKRenderWindows::slotKeyPressed(vtkObject *a, unsigned long b, void *c, void *d, vtkCommand *command)
 {
 	vtkIndent aa;
-	cameraGlobe->PrintSelf(cout,  aa);
-}
-
-QVector3D QtVTKRenderWindows::LeapVec2DataVec(QVector3D v)
-{
-	double dataCenter[3];
-	inputVolume->GetCenter(dataCenter);
-	v = m * v;
-	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
-	v = v * scaleFactor;
-	return v;
-
-}
-
-QVector3D QtVTKRenderWindows::LeapCoords2DataCoords(QVector3D v)
-{
-	//_leapTransform->SetMatrix(QMatrix2vtkMatrix(m));
-	//float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
-	//_leapTransform->Translate(0, 0, 300);		//the volume is 300 mm above the device
-	//_leapTransform->Scale(scaleFactor, scaleFactor, scaleFactor);
-	//_leapTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
-
-	double dataCenter[3];
-	inputVolume->GetCenter(dataCenter);
-	v = m * v;
-	v += QVector3D(0, 0,300);
-	float scaleFactor = std::max(dataCenter[0], std::max(dataCenter[1], dataCenter[2])) / 100.0;
-	v = v * scaleFactor;
-	v += QVector3D(dataCenter[0], dataCenter[1], dataCenter[2]);
-	return v;
-
+	//cameraGlobe->PrintSelf(cout,  aa);
+	_hw.ToggleHandAttachedToCube();
 }
 
 void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir)
 {
-	handTranslation.setToIdentity();
-	handTranslation.setRow(0, QVector4D(xDir));
-	handTranslation.setRow(1, QVector4D(yDir));
-	handTranslation.setRow(2, QVector4D(zDir));
+	_hw.SetHandLocation(origin);
+	_hw.SetHandOrientation(xDir, yDir, zDir);
 
-	double dataCenter[3];
-	inputVolume->GetCenter(dataCenter);
-	QVector3D dataCenterQ(dataCenter[0], dataCenter[1], dataCenter[2]);
+	_hw.UpdateTransformation();
 
-	//origin = m * origin;
-	//origin += QVector3D(100, 100,300);
-	////cout<<"origin1:"<<origin.x()<<"\t"<<origin.y()<<"\t"<<origin.z()<<endl;
-	//origin = QVector3D(	origin.x() * dataCenter[0] / 100,
-	//	origin.y() * dataCenter[1] / 100,
-	//	origin.z() * dataCenter[2] / 100);
-	origin = LeapCoords2DataCoords(origin);
+	QMatrix4x4 cubeOrientation = _hw.GetAdjustedCubeOrientation() * 100;
+	_dirLines[0]->SetPoint2(cubeOrientation.column(0).x(), cubeOrientation.column(0).y(), cubeOrientation.column(0).z());
+	_dirLines[1]->SetPoint2(cubeOrientation.column(1).x(), cubeOrientation.column(1).y(), cubeOrientation.column(1).z());
+	_dirLines[2]->SetPoint2(cubeOrientation.column(2).x(), cubeOrientation.column(2).y(), cubeOrientation.column(2).z());
+	_dirLines[0]->Modified();
+	_dirLines[1]->Modified();
+	_dirLines[2]->Modified();
 
-	vtkSmartPointer<vtkTransform> handTransform = vtkSmartPointer<vtkTransform>::New();
+	QVector3D o, p1, p2, planeCenter;
+	_hw.GetSnappedPlaneCoords(o, p1, p2);
+	_snappingPlane->SetOrigin(o.x(), o.y(), o.z());
+	_snappingPlane->SetPoint1(p1.x(), p1.y(), p1.z());
+	_snappingPlane->SetPoint2(p2.x(), p2.y(), p2.z());
+	_snappingPlane->Modified();
 
-	//this point is the origin of rotation in the data space,
-	//which attaches to the hand center
-	QVector3D fixPoint = LeapVec2DataVec(QVector3D(-150, 0, 0));
+	planeCenter = (p1 + p2) * 0.5;
+	QMatrix4x4 planeTransformation;
+	planeTransformation.translate(planeCenter);
 
-	bool withTranslation = true;
-	volumeTransform->PostMultiply();
-	volumeTransform->Identity();
-	if(withTranslation)
-	{
-		volumeTransform->Translate(-fixPoint[0], -fixPoint[1], -fixPoint[2]);
-	}
-	volumeTransform->Translate(-dataCenter[0], -dataCenter[1], -dataCenter[2]);
+	_volume->SetUserMatrix(QMatrix2vtkMatrix(_hw.GetDataTransformation()));
+	_outlineActor->SetUserMatrix(QMatrix2vtkMatrix(_hw.GetDataTransformation()));
+	_cubeActor->SetUserMatrix(QMatrix2vtkMatrix(_hw.GetCubeTransformation()));
+	_snappingPlaneActor->SetUserMatrix(QMatrix2vtkMatrix(_hw.GetCubeTransformation()));
+	_dirLinesActor[0]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
+	_dirLinesActor[1]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
+	_dirLinesActor[2]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
 
-	volumeTransform->Concatenate(QMatrix2vtkMatrix(m.inverted()));
-	volumeTransform->Concatenate(QMatrix2vtkMatrix(handTranslation.inverted()));
-	volumeTransform->Concatenate(QMatrix2vtkMatrix(m));
-
-	if(withTranslation)
-		volumeTransform->Translate(origin.x(), origin.y(), origin.z());
-	else
-		volumeTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
-
-	_volume->SetUserTransform(volumeTransform);
-	_outlineActor->SetUserTransform(volumeTransform);
-
+	_hw.GetSnappedPlane();
 
 	this->ui->view1->repaint();
 }
@@ -647,21 +657,13 @@ void QtVTKRenderWindows::UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm )
 
 	if(fingers.size() == 0)
 		return;
-	QVector<QVector<QVector3D>> tmp = fingers;
-	//oneSphere->SetCenter(v.x(), v.y(), v.z());
-	//m_vtkCenterPoints->Resize(0);
-	//m_vtkCenterPolyData->Reset();
-	//m_vtkCenterPoints->InsertNextPoint(50,50,50);
-	//handTransformFilter->Update();
 	int k = 0;
 
 	int nCells = 0;
 	for(int i = 0; i < fingers.size(); i++)
 	{
-		//	cout<<"sizes:"<<i<<","<<fingers[i].size()<<endl;
 		for(int j = 0; j < fingers[i].size(); j++)	{
 			QVector3D v = fingers[i][j];
-			//	_fingerSpheres[k]->SetCenter(v.x(), v.y(), v.z());
 			m_vtkCenterPolyData->GetPoints()->SetPoint(k++, v.x(), v.y(), v.z());
 		}
 	}
@@ -673,4 +675,11 @@ void QtVTKRenderWindows::UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm )
 	m_vtkCenterPolyData->Modified();
 	_lines->Modified();
 	this->ui->view1->repaint();
+}
+
+void QtVTKRenderWindows::UpdateGesture(int gesture)
+{
+	//if(1 == gesture)
+	//	_hw.ToggleHandAttachedToCube();
+	//cout<<"gesture = "<<gesture<<endl;
 }

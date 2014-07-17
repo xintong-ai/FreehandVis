@@ -19,6 +19,7 @@ signals:
 	void UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm );
 	void UpdateLine(QVector3D point1, QVector3D point2);
 	void translate2(float v);
+	void UpdateGesture(int gesture);
 
 public:
 	LeapListener()

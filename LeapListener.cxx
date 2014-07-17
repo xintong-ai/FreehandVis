@@ -52,6 +52,10 @@ void LeapListener::onFrame(const Leap::Controller & ctl)
 //		QVector<QVector<QVector3D>> tmp = Leap2QVector(fingers);
 		emit UpdateSkeletonHand(Leap2QVector(fingers), Leap2QVector(palm));
 
+		int gesture = GetGesture(f);
+		//std::cout<<gesture<<std::endl;
+		emit UpdateGesture(gesture);
+
 		timer->restart();
 	}
 }
