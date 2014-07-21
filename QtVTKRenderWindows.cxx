@@ -100,29 +100,141 @@ vtkSmartPointer<vtkActor> AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader)
 
 void QtVTKRenderWindows::AddCube()
 {
-	_cube = vtkCubeSource::New();
-	//_cube->set
-	float cubeHalfSize = _hw.GetCubeSize() * 0.5;
-	float dataCenter[3];
-	_hw.GetDataCenter(dataCenter);
-	_cube->SetBounds(
-		dataCenter[0] - cubeHalfSize, 
-		dataCenter[0] + cubeHalfSize, 
-		dataCenter[1] - cubeHalfSize, 
-		dataCenter[1] + cubeHalfSize, 
-		dataCenter[2] - cubeHalfSize, 
-		dataCenter[2] + cubeHalfSize);
+	//_cube = vtkCubeSource::New();
+	////_cube->set
+	//float cubeHalfSize = _hw.GetCubeSize() * 0.5;
+	//float dataCenter[3];
+	//_hw.GetDataCenter(dataCenter);
+	//_cube->SetBounds(
+	//	dataCenter[0] - cubeHalfSize, 
+	//	dataCenter[0] + cubeHalfSize, 
+	//	dataCenter[1] - cubeHalfSize, 
+	//	dataCenter[1] + cubeHalfSize, 
+	//	dataCenter[2] - cubeHalfSize, 
+	//	dataCenter[2] + cubeHalfSize);
+
+	vtkSmartPointer<vtkPoints> cubePoints = vtkPoints::New();
+	//vtkSmartPointer<vtkPolyData> cubePolyData = vtkPolyData::New();
+	//m_vtkSphereSource = vtkSphereSource::New();
+	//m_vtkSphereSource->SetRadius(4);
+	//m_vtkGlyph3D = vtkGlyph3D::New();
+	/*for(int i = 0; i < 26; i++)
+		cubePoints->InsertNextPoint(10,10,10);*/
+	QVector3D cubeMin, cubeMax;
+	_hw.GetOrignalCubeCoords(cubeMin, cubeMax);
+	cubePoints->InsertNextPoint(cubeMin[0], cubeMin[1], cubeMin[2]);
+	cubePoints->InsertNextPoint(cubeMin[0], cubeMax[1], cubeMin[2]);
+	cubePoints->InsertNextPoint(cubeMax[0], cubeMax[1], cubeMin[2]);
+	cubePoints->InsertNextPoint(cubeMax[0], cubeMin[1], cubeMin[2]);
+
+	cubePoints->InsertNextPoint(cubeMin[0], cubeMin[1], cubeMax[2]);
+	cubePoints->InsertNextPoint(cubeMin[0], cubeMax[1], cubeMax[2]);
+	cubePoints->InsertNextPoint(cubeMax[0], cubeMax[1], cubeMax[2]);
+	cubePoints->InsertNextPoint(cubeMax[0], cubeMin[1], cubeMax[2]);
+
+	//cubePolyData->SetPoints(cubePoints);
+	/*m_vtkGlyph3D->SetSourceConnection(m_vtkSphereSource->GetOutputPort());
+	m_vtkGlyph3D->SetInputData(m_vtkCenterPolyData);
+	m_vtkGlyph3D->GeneratePointIdsOn();
+*/
+	/////////lines
+	//https://gitorious.org/vtkwikiexamples/wikiexamples/source/f1789a4a8887aba4f72f3159e19da2b6c56405e0:PolyData/Tube.cxx#L41
+
+	vtkSmartPointer<vtkCellArray> lineCell = 
+		vtkSmartPointer<vtkCellArray>::New();
+
+	vtkSmartPointer<vtkLine> line = 
+		vtkSmartPointer<vtkLine>::New();
+
+	line->GetPointIds()->SetId(0,0);
+	line->GetPointIds()->SetId(1,1);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,1);
+	line->GetPointIds()->SetId(1,2);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,2);
+	line->GetPointIds()->SetId(1,3);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,3);
+	line->GetPointIds()->SetId(1,0);
+	lineCell->InsertNextCell(line);
+
+	///////////
+	line->GetPointIds()->SetId(0,4);
+	line->GetPointIds()->SetId(1,5);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,5);
+	line->GetPointIds()->SetId(1,6);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,6);
+	line->GetPointIds()->SetId(1,7);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,7);
+	line->GetPointIds()->SetId(1,4);
+	lineCell->InsertNextCell(line);
+
+	//////////////
+
+	line->GetPointIds()->SetId(0,0);
+	line->GetPointIds()->SetId(1,4);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,1);
+	line->GetPointIds()->SetId(1,5);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,2);
+	line->GetPointIds()->SetId(1,6);
+	lineCell->InsertNextCell(line);
+
+	line->GetPointIds()->SetId(0,3);
+	line->GetPointIds()->SetId(1,7);
+	lineCell->InsertNextCell(line);
+
+	///////////////
+	vtkSmartPointer<vtkPolyData> lines = vtkPolyData::New();
+	lines->SetPoints(cubePoints);
+	lines->SetLines(lineCell);
 
 	//Create a mapper and actor
-	vtkSmartPointer<vtkPolyDataMapper> cubeMapper = 
-		vtkSmartPointer<vtkPolyDataMapper>::New();
-	cubeMapper->SetInputConnection(_cube->GetOutputPort());
-	//cubeMapper->
-	_cubeActor = 
-		vtkSmartPointer<vtkActor>::New();
-	_cubeActor->VisibilityOff();
+	//vtkSmartPointer<vtkPolyDataMapper> cubeMapper = 
+	//	vtkSmartPointer<vtkPolyDataMapper>::New();
+	//cubeMapper->SetInputData(lines);
+
+	//_cubeActor->SetMapper(cubeMapper);
+
+	////if using this one without stripper filter, the tubes are broken at the joint point
+	vtkSmartPointer<vtkStripper> stripperFilter = vtkStripper::New();
+	stripperFilter->SetInputData(lines);
+	stripperFilter->Update();
+
+	//Create a tube (cylinder) around the line
+	vtkSmartPointer<vtkTubeFilter> tubeFilter = 
+		vtkSmartPointer<vtkTubeFilter>::New();
+	//tubeFilter->SetInputData(_lines);		
+	tubeFilter->SetInputConnection(stripperFilter->GetOutputPort());
+	tubeFilter->SetRadius(4); //default is .5
+	tubeFilter->SetNumberOfSides(50);
+	tubeFilter->Update();
+
+	////	handTransformFilter->SetInputConnection(m_vtkGlyph3D->GetOutputPort());
+	//leapTransformFilter->SetInputConnection(tubeFilter->GetOutputPort());
+	////handTransformFilter->SetInputData(_lines);
+	//leapTransformFilter->Update();
+
+	vtkSmartPointer<vtkPolyDataMapper> cubeMapper = vtkPolyDataMapper::New();
+	cubeMapper->SetInputConnection(tubeFilter->GetOutputPort());//handTransformFilter->GetOutputPort());
+	//vtkSmartPointer<vtkActor> polyActor = 
+	//	vtkSmartPointer<vtkActor>::New();
+	_cubeActor = vtkSmartPointer<vtkActor>::New();
 	_cubeActor->SetMapper(cubeMapper);
-	_cubeActor->GetProperty()->SetRepresentationToWireframe();
+	_cubeActor->GetProperty()->SetColor(1.0,1.0, 1.0); // Give some color to the line
 }
 
 vtkSmartPointer<vtkActor> QtVTKRenderWindows::AddEarth()
@@ -209,7 +321,7 @@ vtkSmartPointer<vtkActor> QtVTKRenderWindows::GetHandsActor()
 	_leapTransform->PostMultiply();
 	_leapTransform->SetMatrix(QMatrix2vtkMatrix(_hw.GetDataOrientation()));
 	_leapTransform->Translate(0, 0, _hw.GetLeapDataHeight());		//the volume center is 200 mm above the device
-	float scaleFactor = _hw.GetMaxDataSize() / _hw.GetLeapDataSize();	//the side of the cube is 100 mm
+	float scaleFactor = _hw.GetScaleFactor();	//the side of the cube is 100 mm
 	_leapTransform->Scale(scaleFactor, scaleFactor, scaleFactor);
 	_leapTransform->Translate(dataCenter[0], dataCenter[1], dataCenter[2]);
 
@@ -465,7 +577,7 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	camera->SetFocalPoint(dataCenter);//, 0, 0);
 	renVol->SetActiveCamera(camera);
 
-	
+
 	//snapping plane
 	_snappingPlane = vtkSmartPointer<vtkPlaneSource>::New(); 
 	_snappingPlane->SetOrigin(0, 0, 0); 
@@ -524,8 +636,8 @@ QtVTKRenderWindows::QtVTKRenderWindows( int argc, char *argv[])
 	connect(&listener, SIGNAL(UpdateLine(QVector3D, QVector3D)), 
 		this, SLOT(UpdateLine(QVector3D, QVector3D)));
 
-	connect(&listener, SIGNAL(UpdateSkeletonHand(TypeArray2, TypeArray)), 
-		this, SLOT(UpdateSkeletonHand(TypeArray2, TypeArray)), Qt::QueuedConnection);
+	connect(&listener, SIGNAL(UpdateSkeletonHand(TypeArray2, TypeArray, float)), 
+		this, SLOT(UpdateSkeletonHand(TypeArray2, TypeArray, float)), Qt::QueuedConnection);
 
 	connect(&listener, SIGNAL(UpdateGesture(int)), 
 		this, SLOT(UpdateGesture(int)));
@@ -552,9 +664,39 @@ void QtVTKRenderWindows::slotExit()
 
 void QtVTKRenderWindows::slotKeyPressed(vtkObject *a, unsigned long b, void *c, void *d, vtkCommand *command)
 {
-	vtkIndent aa;
+	//vtkIndent aa;
 	//cameraGlobe->PrintSelf(cout,  aa);
-	_hw.ToggleHandAttachedToCube();
+	//_hw.ToggleHandAttachedToCube();
+	//cout << "Keypress callback" << endl;
+
+	vtkRenderWindowInteractor *iren = 
+		static_cast<vtkRenderWindowInteractor*>(a);
+
+	cout << "Pressed: " << iren->GetKeySym() << endl;
+	char cc = iren->GetKeySym()[0];
+	switch(cc)
+	{
+	case '1':
+		_hw.SetInteractMode(INTERACT_MODE::HAND_SNAP);
+		break;
+	case '2':
+		_hw.SetInteractMode(INTERACT_MODE::CUBE_TRANSLATE);
+		break;
+	case '3':
+		_hw.SetInteractMode(INTERACT_MODE::CUBE_SCALE);
+		break;
+	case '4':
+		break;
+	case '5':
+		break;
+	case '0':
+		_hw.SetInteractMode(INTERACT_MODE::DETACH);
+		_hw.ResetTranslationScale();
+		break;
+	default:
+		_hw.SetInteractMode(INTERACT_MODE::DETACH);
+		break;
+	}
 }
 
 void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir)
@@ -564,7 +706,7 @@ void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3
 
 	_hw.UpdateTransformation();
 
-	QMatrix4x4 cubeOrientation = _hw.GetAdjustedCubeOrientation() * 100;
+	QMatrix4x4 cubeOrientation = _hw.GetAdjustedHandOrientation() * 100;
 	_dirLines[0]->SetPoint2(cubeOrientation.column(0).x(), cubeOrientation.column(0).y(), cubeOrientation.column(0).z());
 	_dirLines[1]->SetPoint2(cubeOrientation.column(1).x(), cubeOrientation.column(1).y(), cubeOrientation.column(1).z());
 	_dirLines[2]->SetPoint2(cubeOrientation.column(2).x(), cubeOrientation.column(2).y(), cubeOrientation.column(2).z());
@@ -587,9 +729,9 @@ void QtVTKRenderWindows::UpdateCamera(QVector3D origin, QVector3D xDir, QVector3
 	_outlineActor->SetUserMatrix(QMatrix2vtkMatrix(_hw.GetDataTransformation()));
 	_cubeActor->SetUserMatrix(QMatrix2vtkMatrix(_hw.GetCubeTransformation()));
 	_snappingPlaneActor->SetUserMatrix(QMatrix2vtkMatrix(_hw.GetCubeTransformation()));
-	_dirLinesActor[0]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
-	_dirLinesActor[1]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
-	_dirLinesActor[2]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
+	//_dirLinesActor[0]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
+	//_dirLinesActor[1]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
+	//_dirLinesActor[2]->SetUserMatrix(QMatrix2vtkMatrix(planeTransformation * _hw.GetCubeTransformation()));
 
 	_hw.GetSnappedPlane();
 
@@ -652,11 +794,14 @@ void QtVTKRenderWindows::UpdateLine(QVector3D point1, QVector3D point2)
 	lineWidget->SetPoint2(point2.x(), point2.y(), point2.z());
 }
 
-void QtVTKRenderWindows::UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm )
+void QtVTKRenderWindows::UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm, float sphereRadius)
 {
 
 	if(fingers.size() == 0)
 		return;
+
+	_hw.SetSphereRadius(sphereRadius);
+
 	int k = 0;
 
 	int nCells = 0;

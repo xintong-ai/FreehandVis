@@ -223,7 +223,7 @@ inline void GetTwoPoints(Leap::Frame frame, Leap::Vector &point1, Leap::Vector &
 }
 
 inline void GetSkeletonHand(Leap::Hand hand, std::vector<std::vector<Leap::Vector>> &fingerJoints, 
-	std::vector<Leap::Vector> &palm)
+	std::vector<Leap::Vector> &palm, float &sphereRadius)
 {
 	//static const float kfJointRadiusScale = 0.75f;
 	//static const float kfBoneRadiusScale = 0.5f;
@@ -289,7 +289,7 @@ inline void GetSkeletonHand(Leap::Hand hand, std::vector<std::vector<Leap::Vecto
 	// draw palm position
 	//glColor4fv(vJointColor);
 	//drawSphere(kStyle_Solid, vPalm, kfPalmRadiusScale*fRadius);
-
+	sphereRadius = hand.sphereRadius();
 }
 
 

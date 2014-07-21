@@ -48,9 +48,10 @@ void LeapListener::onFrame(const Leap::Controller & ctl)
 
 		std::vector<std::vector<Leap::Vector>> fingers;
 		std::vector<Leap::Vector> palm ;
-		GetSkeletonHand(f.hands().leftmost(), fingers, palm);
+		float sphereRadius;
+		GetSkeletonHand(f.hands().leftmost(), fingers, palm, sphereRadius);
 //		QVector<QVector<QVector3D>> tmp = Leap2QVector(fingers);
-		emit UpdateSkeletonHand(Leap2QVector(fingers), Leap2QVector(palm));
+		emit UpdateSkeletonHand(Leap2QVector(fingers), Leap2QVector(palm), sphereRadius);
 
 		int gesture = GetGesture(f);
 		//std::cout<<gesture<<std::endl;

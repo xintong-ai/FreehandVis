@@ -91,7 +91,7 @@ public:
 		virtual void slotExit();
 		void slotKeyPressed(vtkObject *a, unsigned long b, void *c, void *d, vtkCommand *command);
 		void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
-		void UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm );
+		void UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm, float sphereRadius);
 		void UpdateCameraGlobe(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 		void UpdatePlane(QVector3D origin, QVector3D normal);
 		void UpdateLine(QVector3D point1, QVector3D point2);
@@ -147,7 +147,7 @@ private:
 	HandWidget _hw;
 
 	//cube
-	vtkSmartPointer<vtkCubeSource> _cube;
+	//vtkSmartPointer<vtkCubeSource> _cube;
 	vtkSmartPointer<vtkActor> _cubeActor;
 
 	//line
