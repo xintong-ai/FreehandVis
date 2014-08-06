@@ -222,6 +222,13 @@ inline void GetTwoPoints(Leap::Frame frame, Leap::Vector &point1, Leap::Vector &
 	point2 = Clamp(RelativePalm3DLoc(frame, indexTip));
 }
 
+inline void GetFingers(Leap::Hand hand, Leap::Vector &thumbTip, Leap::Vector &indexTip, Leap::Vector &indexDir)
+{
+	thumbTip = hand.fingers().fingerType(Leap::Finger::Type::TYPE_THUMB).frontmost().tipPosition();
+	indexTip = hand.fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().tipPosition();
+	indexDir = hand.fingers().fingerType(Leap::Finger::Type::TYPE_INDEX).frontmost().direction().normalized();
+}
+
 inline void GetSkeletonHand(Leap::Hand hand, std::vector<std::vector<Leap::Vector>> &fingerJoints, 
 	std::vector<Leap::Vector> &palm, float &sphereRadius)
 {

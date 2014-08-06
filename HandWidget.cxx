@@ -5,8 +5,8 @@ HandWidget
 	::HandWidget
 	()
 {
-	_dataOrientation.rotate(-90, 1.0, 0.0, 0.0);
-	leapDataHeight = 200;	// the height of the data center
+	_dataOrientation.setToIdentity();//.rotate(-90, 1.0, 0.0, 0.0);
+	leapDataHeight = 75;	// the height of the data bottom
 	leapDataSize = 150;
 	//	_handAttachedToCube = false;
 	//	_cubeSize = 0;
@@ -14,6 +14,7 @@ HandWidget
 	_dataScale = 1;
 	_initialCubeDataRatio = 1.2;
 	_mode = INTERACT_MODE::DETACH;
+	_snapped = false;
 }
 
 HandWidget
@@ -44,25 +45,55 @@ void HandWidget::SetHandLocation(QVector3D v)
 
 QVector3D HandWidget::LeapCoords2DataCoords(QVector3D v)
 {
-	v = _dataOrientation * v;
-	v += QVector3D(0, 0, GetLeapDataHeight());
-	float scaleFactor = GetMaxDataSize() / GetLeapDataSize();
+	return _leap2DataTransformation.map(v);
+}
 
-	v = v * scaleFactor;
-	v += QVector3D(_dataSize[0] * 0.5, _dataSize[1] * 0.5, _dataSize[2] * 0.5);
-	return v;
+QVector<QVector3D> HandWidget::LeapCoords2DataCoords(QVector<QVector3D> v)
+{
+	QVector<QVector3D> ret;
+	for(int i = 0; i < v.size(); i++)
+		ret.push_back(LeapCoords2DataCoords(v[i]));
+	return ret;
+}
+
+QVector<QVector<QVector3D>> HandWidget::LeapCoords2DataCoords(QVector<QVector<QVector3D>> v)
+{
+	QVector<QVector<QVector3D>> ret;
+	for(int i = 0; i < v.size(); i++)
+		ret.push_back(LeapCoords2DataCoords(v[i]));
+	return ret;
 }
 
 void HandWidget::SetDataSize(float x, float y, float z)
 {
-	_dataSize[0] = x;
-	_dataSize[1] = y;
-	_dataSize[2] = z;
+	_dataSize.setX(x);
+	_dataSize.setY(y);
+	_dataSize.setZ(z);
 	float maxDataSize = GetMaxDataSize();
 
 	_cubeTranslation = QVector3D(x * 0.5, y * 0.5, z * 0.5);
 	_dataTranslation = _cubeTranslation;
+
+	float scaleFactor = GetScaleFactor();
+
+	_leap2DataTransformation.setToIdentity();
+	_leap2DataTransformation.translate(_dataSize * 0.5);
+	_leap2DataTransformation.translate(0, - (GetLeapDataHeight() * scaleFactor + GetOriginalCubeSize() * 0.5), 0);
+	_leap2DataTransformation.scale(scaleFactor);
+	_leap2DataTransformation = _leap2DataTransformation * _dataOrientation;
 }
+
+QVector3D HandWidget::GetDataSize()
+{
+	return _dataSize;
+}
+
+
+QMatrix4x4 HandWidget::GetLeap2DataTransformation()
+{
+	return _leap2DataTransformation;
+}
+
 
 float HandWidget::GetScaleFactor()
 {
@@ -73,28 +104,31 @@ QVector3D HandWidget::GetSnappingPoint()
 {
 	QVector3D ret;
 	float cubeSize = GetCubeSize();
+	//std::cout<<"_snappedPlane:\t"<<_snappedPlane<<std::endl;
 	switch(_snappedPlane)
 	{
 	case 0:
-		ret = QVector3D(cubeSize * 0.5, 0, 0);
+		ret = QVector3D(- 1, 0, 0);
 		break;
 	case 1:
-		ret = QVector3D(- cubeSize * 0.5, 0, 0);
+		ret = QVector3D(1, 0, 0);
 		break;
 	case 2:
-		ret = QVector3D(0, cubeSize * 0.5, 0);
+		ret = QVector3D(0, - 1, 0);
 		break;
 	case 3:
-		ret = QVector3D(0, - cubeSize * 0.5, 0);
+		ret = QVector3D(0, 1, 0);
 		break;
 	case 4:
-		ret = QVector3D(0, 0, cubeSize * 0.5);
+		ret = QVector3D(0, 0, - 1);
 		break;
 	case 5:
-		ret = QVector3D(0, 0, - cubeSize * 0.5);
+		ret = QVector3D(0, 0, 1);
 		break;
 	}
-	return ret;
+	QVector3D dataCenter = GetOriginalDataCenter();
+	ret = ret * 0.5 * cubeSize + dataCenter;
+	return _cubeTransformation.map(ret);
 }
 
 QMatrix4x4 HandWidget::GetSnappingRotation()
@@ -139,38 +173,52 @@ QMatrix4x4 HandWidget::GetSnappingRotation()
 
 void HandWidget::UpdateTransformation()
 {
-	if(INTERACT_MODE::HAND_SNAP == _mode)
-	{	
-		_cubeDataOrientation = _handOrientation * GetSnappingRotation();
-		QVector3D palmDir = _handOrientation.column(0).toVector3D().normalized();
-
-		_cubeTranslation = palmDir * GetCubeSize() * 0.5;
-		_cubeTranslation += _handLocation;
-
-		_dataTranslation = _cubeTranslation;
-	}
-	else if(INTERACT_MODE::CUBE_TRANSLATE == _mode)
+	switch(_mode)
 	{
-		QVector3D dir = GetAdjustedHandOrientation().column(0).toVector3D().normalized();
-		_cubeTranslation = dir * GetCubeSize() * 0.5;
-		_cubeTranslation += _handLocation;
-		_dataTranslation = _cubeTranslation + _dataTranslationRelative;
-	}
-	else if(INTERACT_MODE::CUBE_SCALE == _mode)
-	{
-		//QVector3D aa = GetCubeCenter();
-		//QVector4D bb = GetAdjustedHandOrientation().column(0).normalized();
-		//float cc = GetOriginalCubeSize();
-		//float dd =  abs(QVector3D::dotProduct(_handLocation - GetCubeCenter(), QVector3D(GetAdjustedHandOrientation().column(0)).normalized()));
+	case INTERACT_MODE::HAND_SNAP:
+		{	
+			_cubeDataOrientation = _handOrientation * GetSnappingRotation();
+			QVector3D palmDir = _handOrientation.column(0).toVector3D().normalized();
 
-		_cubeScale = abs(QVector3D::dotProduct(_handLocation - GetCubeCenter(), QVector3D(GetAdjustedHandOrientation().column(0)).normalized()))
-			/ (GetOriginalCubeSize() * 0.5);
+			_cubeTranslation = palmDir * GetCubeSize() * 0.5;
+			_cubeTranslation += _handLocation;
 
 
-		_dataScale = _dataScaleRelative * _cubeScale;
-
-		//_dataTranslation = _dataTranslation + GetOriginalDataCenter() - _cubeTranslation;
-		//_cubeTranslation = GetOriginalDataCenter();
+			_dataTranslation = _cubeTranslation + _cubeDataOrientation.map(_dataTranslationRelativeInCubeSpace);
+			break;
+		}
+	case INTERACT_MODE::CUBE_DATA_TRANSLATE:
+		{
+			QVector3D dir = GetAdjustedHandOrientation().column(0).toVector3D().normalized();
+			_cubeTranslation = dir * GetCubeSize() * 0.5;
+			_cubeTranslation += _handLocation;
+			_dataTranslation = _cubeTranslation + _dataTranslationRelative;
+			break;
+		}
+	case INTERACT_MODE::CUBE_DATA_SCALE:
+		{
+			_cubeScale = abs(QVector3D::dotProduct(_handLocation - GetCubeCenter(), QVector3D(GetAdjustedHandOrientation().column(0)).normalized()))
+				/ (GetOriginalCubeSize() * 0.5);
+			_dataScale = _dataScaleRelative * _cubeScale;
+			_dataTranslation = _cubeTranslation + _cubeScale * _cubeDataOrientation.map(_dataTranslationRelativeInCubeSpace);
+			break;
+		}
+	case INTERACT_MODE::CUBE_TRANSLATE:
+		{
+			QVector3D dir = GetAdjustedHandOrientation().column(0).toVector3D().normalized();
+			_cubeTranslation = dir * GetCubeSize() * 0.5;
+			_cubeTranslation += _handLocation;
+			//_dataTranslation = _cubeTranslation + _dataTranslationRelative;
+			break;
+		}
+	case INTERACT_MODE::CUBE_SCALE:
+		{
+			_cubeScale = abs(QVector3D::dotProduct(_handLocation - GetCubeCenter(), QVector3D(GetAdjustedHandOrientation().column(0)).normalized()))
+				/ (GetOriginalCubeSize() * 0.5);
+			//_dataScale = _dataScaleRelative * _cubeScale;
+			//_dataTranslation = _cubeTranslation + _cubeScale * _cubeDataOrientation.map(_dataTranslationRelativeInCubeSpace);
+			break;
+		}
 	}
 
 	_dataTransformation.setToIdentity();
@@ -188,8 +236,8 @@ void HandWidget::UpdateTransformation()
 	_cubeTransformation.scale(_cubeScale);
 
 	//set the data center to the origin
-	_dataTransformation.translate(-_dataSize[0] * 0.5, -_dataSize[1] * 0.5, -_dataSize[2] * 0.5);
-	_cubeTransformation.translate(-_dataSize[0] * 0.5, -_dataSize[1] * 0.5, -_dataSize[2] * 0.5);
+	_dataTransformation.translate(-_dataSize.x() * 0.5, -_dataSize.y() * 0.5, -_dataSize.z() * 0.5);
+	_cubeTransformation.translate(-_dataSize.x() * 0.5, -_dataSize.y() * 0.5, -_dataSize.z() * 0.5);
 
 }
 
@@ -263,9 +311,14 @@ void HandWidget::GetOrignalCubeCoords(QVector3D &min, QVector3D &max)
 // data center is the same as data translation
 void HandWidget::GetDataCenter(float v[3])
 {
-	v[0] = _dataTranslation[0];
-	v[1] = _dataTranslation[1];
-	v[2] = _dataTranslation[2];
+	v[0] = _dataTranslation.x();
+	v[1] = _dataTranslation.y();
+	v[2] = _dataTranslation.z();
+}
+
+QVector3D HandWidget::GetDataCenter()
+{
+	return _dataTranslation;
 }
 
 QVector3D HandWidget::GetOriginalDataCenter()
@@ -280,7 +333,12 @@ QVector3D HandWidget::GetCubeCenter()
 
 float HandWidget::GetMaxDataSize()
 {
-	return std::max(_dataSize[0], std::max(_dataSize[1], _dataSize[2]));
+	return std::max(_dataSize.x(), std::max(_dataSize.y(), _dataSize.z()));
+}
+
+float HandWidget::GetMinDataSize()
+{
+	return std::min(_dataSize.x(), std::min(_dataSize.y(), _dataSize.z()));
 }
 
 float HandWidget::GetLeapDataHeight()
@@ -307,9 +365,10 @@ inline float Magnitude(QMatrix4x4 m)
 	return ret;
 }
 
+
 int HandWidget::GetSnappedPlane()
 {
-	if(INTERACT_MODE::DETACH != _mode && INTERACT_MODE::CUBE_SCALE != _mode )
+	if(INTERACT_MODE::DETACH != _mode && INTERACT_MODE::CUBE_DATA_SCALE != _mode && DETACH_NORMALIZE != _mode )
 		return 0;
 	QMatrix4x4 orie[24];
 	QVector3D xDirCube = QVector3D(_cubeDataOrientation.column(0));
@@ -328,38 +387,6 @@ int HandWidget::GetSnappedPlane()
 	iDiff[4] = QVector3D::dotProduct(xDirHand, zDirCube);
 	iDiff[5] = QVector3D::dotProduct(xDirHand,-zDirCube);
 
-	//QMatrix4x4 rot, rot2;
-	//float diff[24];
-	//for(int i = 0; i < 6; i++)	{
-	//	rot2.setToIdentity();
-	//	switch(i)	{
-	//	case 0:
-	//		break;
-	//	case 1:
-	//		rot2.rotate(180, QVector3D(zDir));
-	//		break;
-	//	case 2:
-	//		rot2.rotate(-90, QVector3D(yDir));
-	//		break;
-	//	case 3:
-	//		rot2.rotate(90, QVector3D(yDir));
-	//		break;
-	//	case 4:
-	//		rot2.rotate(-90, QVector3D(zDir));
-	//		break;
-	//	case 5:
-	//		rot2.rotate(90, QVector3D(zDir));
-	//		break;
-	//	}
-	//	for(int j = 0; j < 4; j++)	{
-	//		rot.setToIdentity();
-	//		rot.rotate(90 * j, QVector3D(xDir));
-	//		orie[i * 4 + j] = rot * rot2 * _cubeOrientation;
-	//		//QQuaternion quat;
-	//		//orie[0][0].rotate(q
-	//		diff[i * 4 + j] = Magnitude(orie[i * 4 + j] - _handOrientation);
-	//	}
-	//}
 	int iMax;
 	float max = - FLT_MAX;
 	for(int i = 0; i < 6; i++)	{
@@ -413,19 +440,22 @@ int HandWidget::GetSnappedPlane()
 	_snappedOrientation = jMax;
 	//std::cout<<"_snappedPlane:\t"<<_snappedPlane<<std::endl;
 	//std::cout<<"_snappedOrientation:\t"<<_snappedOrientation<<std::endl;
+
+	QVector3D leftHandCenter = GetLeftHandCenter();
+	float cubeSize = GetCubeSize();
+	float dist = GetSnappingPoint().distanceToPoint(leftHandCenter);
+	_snapped = dist < (cubeSize * 0.3);
+	//if(_snapped)
+	//	std::cout<<"_snapped:\t"<<int(_snapped)<<std::endl;
+
 	return iMax * 4 + jMax;
 }
 
 void HandWidget::SetInteractMode(INTERACT_MODE m)
 {
-	if(INTERACT_MODE::CUBE_SCALE == m)
-	{
-		_dataScaleRelative = _dataScale / _cubeScale;
-	}
-	else if(INTERACT_MODE::CUBE_TRANSLATE == m)
-	{
-		_dataTranslationRelative = _dataTranslation - _cubeTranslation;
-	}
+	_dataScaleRelative = _dataScale / _cubeScale;
+	_dataTranslationRelative = _dataTranslation - _cubeTranslation;
+	_dataTranslationRelativeInCubeSpace = _cubeDataOrientation.inverted().map(_dataTranslationRelative);
 	_mode = m;
 }
 
@@ -481,11 +511,65 @@ void HandWidget::SetSphereRadius(float v)
 	_sphereRadius = v * GetScaleFactor();
 }
 
-void HandWidget::ResetTranslationScale()
+void HandWidget::ResetCube()
 {
 	//_dataScale = _dataScale / _cubeScale;
 	_cubeScale = 1;
 
 	//_dataTranslation = _dataTranslation + GetOriginalDataCenter() - _cubeTranslation;
 	_cubeTranslation = GetOriginalDataCenter();
+}
+
+void HandWidget::ResetCubeData()
+{
+	float scaleChanged = 1.0 / _cubeScale;
+	_dataScale = _dataScale / _cubeScale;
+	_cubeScale = 1;
+
+	//_dataTranslation = _dataTranslation + GetOriginalDataCenter() - _cubeTranslation;
+	_cubeTranslation = GetOriginalDataCenter();
+	_dataTranslation = _cubeTranslation + scaleChanged * _cubeDataOrientation.map(_dataTranslationRelativeInCubeSpace);
+}
+
+
+
+void HandWidget::SetHands(QVector<QVector<QVector3D > > leftFingers, QVector<QVector3D > leftPalm)
+{
+	_leftFingers = LeapCoords2DataCoords(leftFingers);
+	_leftPalm = LeapCoords2DataCoords(leftPalm);
+}
+
+QVector3D HandWidget::GetLeftHandCenter()
+{
+	if(0 == _leftFingers.size() )
+		return QVector3D(0, 0, 0);
+	return _leftFingers[2][0];
+}
+
+bool HandWidget::GetSnappingPlaneStatus()
+{
+	return _snapped;
+}
+
+void HandWidget::SetRightHand(QVector3D thumbTip, QVector3D indexTip, QVector3D indexDir)
+{
+	_rightThumbTip = LeapCoords2DataCoords(thumbTip);
+	_rightIndexTip = LeapCoords2DataCoords(indexTip);
+	_rightIndexDir = LeapCoords2DataCoords(indexDir);
+}
+
+QVector3D HandWidget::CameraCoords2DataCoords(QVector3D v)
+{
+	return _dataTransformation.inverted().map(v);
+}
+
+void HandWidget::GetRightHandTwoTips(QVector3D &tip1, QVector3D &tip2)
+{
+	tip1 = _rightThumbTip;
+	tip2 = _rightIndexTip;
+}
+
+QVector3D HandWidget::GetRightIndexTip()
+{
+	return _rightIndexTip;
 }

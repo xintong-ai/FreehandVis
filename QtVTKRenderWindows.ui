@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1149</width>
-    <height>515</height>
+    <width>1402</width>
+    <height>683</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -28,26 +28,26 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>30</y>
-      <width>961</width>
-      <height>471</height>
+      <y>10</y>
+      <width>1271</width>
+      <height>651</height>
      </rect>
     </property>
     <layout class="QGridLayout" name="gridLayout_2">
+     <item row="0" column="1">
+      <widget class="QVTKWidget" name="view2" native="true"/>
+     </item>
      <item row="0" column="0">
       <widget class="QVTKWidget" name="view1" native="true"/>
-     </item>
-     <item row="0" column="1">
-      <widget class="QVTKWidget" name="view4" native="true"/>
      </item>
     </layout>
    </widget>
    <widget class="QFrame" name="frame">
     <property name="geometry">
      <rect>
-      <x>980</x>
-      <y>20</y>
-      <width>161</width>
+      <x>1290</x>
+      <y>10</y>
+      <width>101</width>
       <height>471</height>
      </rect>
     </property>

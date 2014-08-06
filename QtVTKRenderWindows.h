@@ -59,6 +59,12 @@
 #include "vtkStripper.h"
 #include "HandWidget.h"
 #include "vtkCubeSource.h"
+#include <vtkDataSetReader.h>
+
+#include "vtkImageGridSource.h"
+#include <vtkGPUVolumeRayCastMapper.h>
+//#include "vtkSmartVolumeMapper.h"
+//#include <vtkLensOpenGLGPUVolumeRayCastMapper.h>
 
 // Forward Qt class declarations
 class Ui_QtVTKRenderWindows;
@@ -86,33 +92,45 @@ public:
 	QtVTKRenderWindows(int argc, char *argv[]);
 	~QtVTKRenderWindows() {}
 
+	void ToggleStreamline();
+
 	private slots:
 
 		virtual void slotExit();
 		void slotKeyPressed(vtkObject *a, unsigned long b, void *c, void *d, vtkCommand *command);
 		void UpdateCamera(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
 		void UpdateSkeletonHand(TypeArray2 fingers, TypeArray palm, float sphereRadius);
-		void UpdateCameraGlobe(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
-		void UpdatePlane(QVector3D origin, QVector3D normal);
-		void UpdateLine(QVector3D point1, QVector3D point2);
+		//void UpdateCameraGlobe(QVector3D origin, QVector3D xDir, QVector3D yDir, QVector3D zDir);
+		//void UpdatePlane(QVector3D origin, QVector3D normal);
+		//void UpdateLine(QVector3D point1, QVector3D point2);
 		void UpdateGesture(int gesture);
+		void UpdateRightHand(QVector3D thumbTip, QVector3D indexTip, QVector3D indexDir);
 protected:
 
 	LeapListener listener;
 	Leap::Controller controller;
 
 private:
-	vtkSmartPointer<vtkVolume> AddVolume(vtkSmartPointer<vtkImageAlgorithm> reader);
+	vtkSmartPointer<vtkVolume> AddVolume(vtkSmartPointer<vtkAlgorithmOutput> output);
 	//vtkSmartPointer<vtkActor> AddOutline(vtkSmartPointer<vtkImageAlgorithm> reader);
 	vtkSmartPointer<vtkActor> AddEarth();
 	vtkSmartPointer<vtkActor> GetHandsActor();
 
-	void AddBoxWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
-	void AddLineWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
-	void AddPlaneWidget(vtkSmartPointer<vtkImageAlgorithm> reader, vtkRenderWindowInteractor *interactor);
+	void AddBoxWidget(vtkSmartPointer<vtkAlgorithm> reader, vtkRenderWindowInteractor *interactor);
+	void AddLineWidget(vtkSmartPointer<vtkAlgorithm> reader, vtkRenderWindowInteractor *interactor);
+	void AddPlaneWidget(vtkSmartPointer<vtkAlgorithm> reader, vtkRenderWindowInteractor *interactor);
 	void AddCube();
+	void AddAxisLines();
+	void AddSnappingPlane();
+	void AddStreamlines(vtkSmartPointer<vtkDataSetReader> reader);
+	void AddBarChart(vtkSmartPointer<vtkDataSetReader> reader);
+	void AddCamera();
+	void AddMask();
+	void AddSphere();
+	//void UpdateMask(QVector3D p);
+	void UpdateMask(QVector3D center, float radius, float threshold);
 
-	QVector3D NormlizedLeapCoords2DataCoords(QVector3D p);
+	//QVector3D NormlizedLeapCoords2DataCoords(QVector3D p);
 	vtkSmartPointer<vtkCamera> camera;
 	vtkSmartPointer<vtkCamera> cameraGlobe;
 	vtkSmartPointer<vtkVolume> _volume;
@@ -123,7 +141,6 @@ private:
 	vtkSmartPointer<vtkImplicitPlaneRepresentation> repPlane;
 	QMatrix4x4 handTranslation;
 	vtkSmartPointer<vtkLineWidget> lineWidget;
-	QMatrix4x4 m;				//rotation from Leap coordinate system to VTK coordinate system
 	vtkSmartPointer<vtkPolyData> inputGlobe;
 
 	vtkSmartPointer<vtkTransform> _leapTransform;
@@ -157,6 +174,25 @@ private:
 	//snapping plane
 	vtkSmartPointer<vtkPlaneSource> _snappingPlane;
 	vtkSmartPointer<vtkActor> _snappingPlaneActor;
+	double _scalerRange[2];
+
+	vtkSmartPointer< vtkRenderer > _renVol;
+
+	//streamlines
+	vtkSmartPointer<vtkActor> _streamLineActor;
+	bool _streamlineOn;
+
+	//side
+	vtkSmartPointer< vtkRenderer > _ren2;
+	vtkSmartPointer<vtkLineSource> _seeds;
+
+	//mask
+	vtkGPUVolumeRayCastMapper *_volumeMapper;
+	vtkSmartPointer<vtkImageData> _mask;
+	vtkSmartPointer<vtkDataArray> _dataArray;
+	int _iScale;
+	vtkSmartPointer<vtkVolume> _maskVolume;
+	vtkSmartPointer<vtkGPUVolumeRayCastMapper> _maskVolumeMapper;
 };
 
 #endif // QtVTKRenderWindows_H
